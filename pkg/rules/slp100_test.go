@@ -163,3 +163,117 @@ func TestSLP100_Description(t *testing.T) {
 		t.Errorf("default severity should be block")
 	}
 }
+
+func TestSLP100_PythonPassStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.py b/handler.py
+--- a/handler.py
++++ b/handler.py
+@@ -1,1 +1,3 @@
++def get_items():
++    pass
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for Python pass stub")
+	}
+}
+
+func TestSLP100_PythonRaiseNotImplemented(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.py b/handler.py
+--- a/handler.py
++++ b/handler.py
+@@ -1,1 +1,3 @@
++def get_items():
++    raise NotImplementedError
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for Python raise NotImplementedError")
+	}
+}
+
+func TestSLP100_JSArrowStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,2 @@
++const getItems = () => null;
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for JS arrow function stub")
+	}
+}
+
+func TestSLP100_JSThrowUnimplemented(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,3 @@
++function getItems() {
++    throw new Error("not implemented");
++}
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for JS throw not implemented")
+	}
+}
+
+func TestSLP100_GoPanicUnimplemented(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.go b/handler.go
+--- a/handler.go
++++ b/handler.go
+@@ -1,1 +1,3 @@
++func GetItems() []Item {
++    panic("not implemented")
++}
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for Go panic not implemented")
+	}
+}
+
+func TestSLP100_JSConsoleLogStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,3 @@
++function getItems() {
++    console.log("todo");
++}
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for console.log stub")
+	}
+}
+
+func TestSLP100_JSAsyncArrowStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,2 @@
++const getItems = async (req) => null;
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for async arrow stub")
+	}
+}
+
+func TestSLP100_VoidZeroReturn(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,3 @@
++function getItems() {
++    return void 0;
++}
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for return void 0")
+	}
+}

@@ -215,18 +215,19 @@ func slp118CheckAccess(content string, guards []*slp118Guard, nonEmpty map[strin
 // tests for emptiness (e.g. `len(x) == 0`, `x.length < 1`, `!x.length`).
 func slp118EmptyCheckCollections(line string, isJS bool) []string {
 	var cols []string
+	collect := func(re *regexp.Regexp) {
+		for _, m := range re.FindAllStringSubmatch(line, -1) {
+			if len(m) > 1 {
+				cols = append(cols, m[1])
+			}
+		}
+	}
 	if isJS {
-		for _, m := range slp118EmptyJSRe.FindAllStringSubmatch(line, -1) {
-			cols = append(cols, m[1])
-		}
-		for _, m := range slp118EmptyJSNotRe.FindAllStringSubmatch(line, -1) {
-			cols = append(cols, m[1])
-		}
+		collect(slp118EmptyJSRe)
+		collect(slp118EmptyJSNotRe)
 		return cols
 	}
-	for _, m := range slp118EmptyLenRe.FindAllStringSubmatch(line, -1) {
-		cols = append(cols, m[1])
-	}
+	collect(slp118EmptyLenRe)
 	return cols
 }
 

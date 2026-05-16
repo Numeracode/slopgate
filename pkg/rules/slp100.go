@@ -216,9 +216,9 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 
 					cleanContent := stripCommentAndStrings(content)
 
-					// Arrow functions. A single-expression body (`=> expr`)
-					// is judged immediately; a block body (`=> {`) falls
-					// through to the brace-body scanning below.
+					// Arrow functions: a single-expression body is judged
+					// immediately, while a block body falls through to the
+					// brace-body scanning below.
 					arrowIdx := strings.Index(cleanContent, "=>")
 					if arrowIdx >= 0 {
 						expr := strings.TrimSpace(cleanContent[arrowIdx+2:])

@@ -189,6 +189,37 @@ diff --git a/src/api/routes.test.ts b/src/api/routes.test.ts
 	}
 }
 
+func TestSLP098_NoFireOnKeywordPrefixFilename(t *testing.T) {
+	// apiClient.ts is not an API route file — `api` is only a prefix.
+	d := parseDiff(t, `diff --git a/src/apiClient.ts b/src/apiClient.ts
+--- /dev/null
++++ b/src/apiClient.ts
+@@ -0,0 +1,2 @@
++  export const apiClient = createClient();
++  export function fetchUser(id: string) { return apiClient.get(id); }
+`)
+	got := SLP098{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for apiClient.ts (keyword prefix only), got %d", len(got))
+	}
+}
+
+func TestSLP098_NoFireOnClientRouterNavigation(t *testing.T) {
+	// router.navigate(...) is client-side navigation, not a tRPC route.
+	d := parseDiff(t, `diff --git a/src/nav.ts b/src/nav.ts
+--- a/src/nav.ts
++++ b/src/nav.ts
+@@ -1,2 +1,3 @@
+ import { router } from "./router";
++export function goHome() { router.navigate("/home"); }
+ export const ready = true;
+`)
+	got := SLP098{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for client-side router.navigate, got %d", len(got))
+	}
+}
+
 func TestSLP098_NewControllersFileByName(t *testing.T) {
 	d := parseDiff(t, `diff --git a/src/controllers/userController.ts b/src/controllers/userController.ts
 --- /dev/null

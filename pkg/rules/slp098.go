@@ -64,14 +64,17 @@ var slp098RoutePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(?:get|post|put|delete|patch|resources|resource)\s+["'\x60]/`),
 	// Various handler patterns
 	regexp.MustCompile(`(?i)\.(?:AddRoute|MapPath|HandlePath)\s*\(`),
-	// tRPC routers
-	regexp.MustCompile(`(?i)(?:router|publicProcedure|protectedProcedure)\.`),
+	// tRPC procedures and router definitions (not bare `router.` — that
+	// also matches client-side navigation such as `router.navigate(...)`)
+	regexp.MustCompile(`(?i)\b(?:public|protected)Procedure\b`),
+	regexp.MustCompile(`(?i)\b(?:createTRPCRouter|(?:t\.)?router)\s*\(\s*\{`),
 }
 
 // slp098RouteFileNames matches filenames that are likely route/handler files
 // even when the route registration patterns above don't match (e.g., file-based
-// routing in Next.js, or config-driven routers).
-var slp098RouteFileNames = regexp.MustCompile(`(?i)(?:^|/)(?:routes?|api(?:s)?|endpoints?|handlers?|controllers?|rest)(?:/|[^/]*\.(?:go|ts|tsx|js|jsx|py|java|rb)$)`)
+// routing in Next.js, or config-driven routers). The keyword must be a whole
+// path segment or filename stem, so `apiClient.ts` is not treated as an API file.
+var slp098RouteFileNames = regexp.MustCompile(`(?i)(?:^|/)(?:routes?|api(?:s)?|endpoints?|handlers?|controllers?|rest)(?:/|(?:[._-][^/]*)?\.(?:go|ts|tsx|js|jsx|py|java|rb)$)`)
 
 func (r SLP098) Check(d *diff.Diff) []Finding {
 	var out []Finding

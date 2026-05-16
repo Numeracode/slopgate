@@ -27,7 +27,7 @@ Rules SLP081–100 were added for CR parity but underperform.
 
 | Task ID | Rule | Current Overlap | Enhancement | Expected Δ |
 |---------|------|----------------|-------------|------------|
-| **SLO-098-expand** | SLP098 | 3 | Detect new express/next route + missing test file | +3–5 overlap | ✅ Complete — added Fastify, FastAPI, Gin, Echo, Fiber, Django, tRPC patterns + file-based route detection (10 new tests) |
+| **SLO-098-expand** | SLP098 | 3 | Detect new express/next route + missing test file | +3–5 overlap |
 | **SLO-099-expand** | SLP099 | 5 | Track response field rename/removal + test not updated | +2–4 overlap |
 | **SLO-100-broaden** | SLP100 | 0 | Add patterns: `return nil`, `return ""`, stubs with TODO comment | +2–6 overlap |
 
@@ -110,7 +110,7 @@ These slopgate-only rules are its competitive advantage.
 | SLO-204 | P1 | Silent promise mask | ✅ Complete (awaiting CR re-review of PR #26) |
 | SLO-207 | P1 | Transaction rollback | ✅ Complete (SLP207 implemented + tests passing) |
 | SLO-058-tune | P1 | SQL concat regexp scoping fix | ✅ Complete (committed) |
-| SLO-098-expand | P2 | Route w/o test (broadened) | 🚧 Not started |
+| SLO-098-expand | P2 | Route w/o test (broadened) | ✅ Complete |
 | SLO-099-expand | P2 | Response field changed test | 🚧 Not started |
 | SLO-100-broaden | P2 | Stub returns (broadened) | 🚧 Not started |
 | SLO-151 | P3 | Orphaned test | 🚧 Not started |

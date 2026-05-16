@@ -30,18 +30,47 @@ var slp099GoStructField = regexp.MustCompile(
 
 var slp099TSInterfaceProp = regexp.MustCompile(`(?i)^(?:readonly\s+)?\w+(?:\?)?:\s*(?:string|number|boolean|Date|\[\]\w+|\w+\[\])[;,]?(?:\s*//.*)?$`)
 
+// slp099PythonField matches Python dataclass/Pydantic model field definitions.
+// Covers: field: Type, field: Type = default, field: Optional[Type], field: list[Type]
+var slp099PythonField = regexp.MustCompile(
+	`^\s*[a-z_]\w*\s*:\s*(?:` +
+		`(?:Optional|List|Dict|Set|Tuple|Any|str|int|float|bool|bytes|datetime)` +
+		`|\w+` +
+		`)(?:\[.*?\])?(?:\s*=\s*.+)?(?:\s*#.*)?$`,
+)
+
 var slp099ResponseKeywords = map[string]struct{}{
 	"response": {},
 	"dto":      {},
 	"output":   {},
 	"result":   {},
 	"payload":  {},
+	"body":     {},
+	"reply":    {},
+	"envelope": {},
+	"wrapper":  {},
 }
 
 var slp099IgnoredTrailingTokens = map[string]struct{}{
 	"model":  {},
 	"schema": {},
 	"type":   {},
+	"types":  {},
+	"config": {},
+	"util":   {},
+	"helper": {},
+}
+
+// slp099UtilitySuffixes are filename suffixes that indicate a utility/helper
+// file rather than an API response type, even if the stem contains a response
+// keyword (e.g., result_cache.ts, response_util.go).
+var slp099UtilitySuffixes = []string{
+	"_cache", ".cache",
+	"_util", ".util",
+	"_helper", ".helper",
+	"_config", ".config",
+	"_factory", ".factory",
+	"_builder", ".builder",
 }
 
 var slp099CamelBoundaryLowerToUpper = regexp.MustCompile(`([a-z0-9])([A-Z])`)
@@ -50,6 +79,14 @@ var slp099NonAlnum = regexp.MustCompile(`[^A-Za-z0-9]+`)
 var slp099VersionToken = regexp.MustCompile(`^v?\d+$`)
 
 func hasResponseKeyword(name string) bool {
+	// Reject utility/helper files even if they contain a response keyword.
+	lower := strings.ToLower(name)
+	for _, suffix := range slp099UtilitySuffixes {
+		if strings.HasSuffix(strings.TrimSuffix(lower, path.Ext(lower)), suffix) ||
+			strings.HasSuffix(lower, suffix+path.Ext(lower)) {
+			return false
+		}
+	}
 	tokens := slp099FilenameTokens(name)
 	for i := len(tokens) - 1; i >= 0; i-- {
 		tok := tokens[i]
@@ -73,6 +110,9 @@ func matchesSlp099FieldLine(filePath, content string) bool {
 	}
 	if isJSOrTSFile(filePath) {
 		return slp099TSInterfaceProp.MatchString(content)
+	}
+	if isPythonFile(filePath) {
+		return slp099PythonField.MatchString(content)
 	}
 	return false
 }
@@ -108,7 +148,7 @@ func (r SLP099) Check(d *diff.Diff) []Finding {
 			changedTestFiles[f.Path] = true
 			continue
 		}
-		if !isGoFile(f.Path) && !isJSOrTSFile(f.Path) {
+		if !isGoFile(f.Path) && !isJSOrTSFile(f.Path) && !isPythonFile(f.Path) {
 			continue
 		}
 
@@ -218,5 +258,18 @@ func slp099RelatedDir(respDir, testDir string) bool {
 	if respDir == testDir {
 		return true
 	}
-	return path.Dir(testDir) == respDir || path.Dir(respDir) == testDir
+	if path.Dir(testDir) == respDir || path.Dir(respDir) == testDir {
+		return true
+	}
+	// Parallel test directories: src/foo → tests/foo, src/foo → test/foo
+	for _, testRoot := range []string{"tests", "test", "__tests__", "specs"} {
+		if strings.HasPrefix(testDir, testRoot+"/") || testDir == testRoot {
+			remainder := strings.TrimPrefix(testDir, testRoot)
+			remainder = strings.TrimPrefix(remainder, "/")
+			if remainder == "" || respDir == remainder || strings.HasSuffix(respDir, "/"+remainder) {
+				return true
+			}
+		}
+	}
+	return false
 }

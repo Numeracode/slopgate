@@ -81,9 +81,9 @@ var slp099VersionToken = regexp.MustCompile(`^v?\d+$`)
 func hasResponseKeyword(name string) bool {
 	// Reject utility/helper files even if they contain a response keyword.
 	lower := strings.ToLower(name)
+	stem := slp099TrimKnownExt(path.Base(lower))
 	for _, suffix := range slp099UtilitySuffixes {
-		if strings.HasSuffix(strings.TrimSuffix(lower, path.Ext(lower)), suffix) ||
-			strings.HasSuffix(lower, suffix+path.Ext(lower)) {
+		if strings.HasSuffix(stem, suffix) {
 			return false
 		}
 	}
@@ -144,7 +144,7 @@ func (r SLP099) Check(d *diff.Diff) []Finding {
 		if f.IsDelete || isDocFile(f.Path) {
 			continue
 		}
-		if isTestFile(f.Path) {
+		if isTestFile(f.Path) || isPythonTestFile(f.Path) {
 			changedTestFiles[f.Path] = true
 			continue
 		}
@@ -242,6 +242,8 @@ func testMatchesResponse(respPath string, testFiles map[string]bool) bool {
 func slp099FileStem(filePath string) string {
 	base := path.Base(filePath)
 	stem := slp099TrimKnownExt(base)
+	// Python's pytest convention puts the marker as a `test_` prefix.
+	stem = strings.TrimPrefix(stem, "test_")
 	switch {
 	case strings.HasSuffix(stem, "_test"):
 		return strings.TrimSuffix(stem, "_test")
@@ -266,7 +268,17 @@ func slp099RelatedDir(respDir, testDir string) bool {
 		if strings.HasPrefix(testDir, testRoot+"/") || testDir == testRoot {
 			remainder := strings.TrimPrefix(testDir, testRoot)
 			remainder = strings.TrimPrefix(remainder, "/")
-			if remainder == "" || respDir == remainder || strings.HasSuffix(respDir, "/"+remainder) {
+			if remainder == "" {
+				// Test sits directly in the test root; relate it to a
+				// source file at the project root or in a single
+				// top-level directory (src/, lib/), but not one nested
+				// at arbitrary depth.
+				if respDir == "" || respDir == "." || !strings.Contains(respDir, "/") {
+					return true
+				}
+				continue
+			}
+			if respDir == remainder || strings.HasSuffix(respDir, "/"+remainder) {
 				return true
 			}
 		}

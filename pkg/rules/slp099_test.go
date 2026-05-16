@@ -247,6 +247,41 @@ func TestSLP099_IgnoresResponseUtilFile(t *testing.T) {
 	}
 }
 
+func TestSLP099_IgnoresResponseUtilDeclarationFile(t *testing.T) {
+	d := parseDiff(t, `diff --git a/response_util.d.ts b/response_util.d.ts
+--- a/response_util.d.ts
++++ b/response_util.d.ts
+@@ -1,3 +1,4 @@
+ export interface ResponseUtilEntry {
++  slug: string;
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for response_util.d.ts, got %d", len(got))
+	}
+}
+
+func TestSLP099_FiresWhenNestedSourceHasOnlyRootTest(t *testing.T) {
+	d := parseDiff(t, `diff --git a/src/api/v2/response.ts b/src/api/v2/response.ts
+--- a/src/api/v2/response.ts
++++ b/src/api/v2/response.ts
+@@ -1,3 +1,4 @@
+ export interface ApiResponse {
++  slug: string;
+ }
+diff --git a/tests/response.test.ts b/tests/response.test.ts
+--- a/tests/response.test.ts
++++ b/tests/response.test.ts
+@@ -1,1 +1,2 @@
++  test("response", () => {})
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding: a deeply nested response file is not covered by a root tests/ test")
+	}
+}
+
 func TestSLP099_IgnoresResponseFactoryFile(t *testing.T) {
 	d := parseDiff(t, `diff --git a/response_factory.go b/response_factory.go
 --- a/response_factory.go

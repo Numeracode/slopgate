@@ -244,9 +244,8 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 						}
 					}
 
-					// Check for a one-line Python def: def f(): <body>. Any
-					// body without a side effect (pass, raise, return None,
-					// return 0, ...) makes it a no-op stub.
+					// One-line Python def. A body with no side effect — a
+					// pass, a raise, or a zero-value return — is a no-op stub.
 					colonIdx := strings.LastIndex(cleanContent, ":")
 					if colonIdx >= 0 && isPythonFile(f.Path) {
 						afterColon := strings.TrimSpace(cleanContent[colonIdx+1:])

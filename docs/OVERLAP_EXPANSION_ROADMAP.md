@@ -110,7 +110,7 @@ These slopgate-only rules are its competitive advantage.
 | SLO-204 | P1 | Silent promise mask | ✅ Complete (awaiting CR re-review of PR #26) |
 | SLO-207 | P1 | Transaction rollback | ✅ Complete (SLP207 implemented + tests passing) |
 | SLO-058-tune | P1 | SQL concat regexp scoping fix | ✅ Complete (committed) |
-| SLO-098-expand | P2 | Route w/o test (broadened) | 🚧 Not started |
+| SLO-098-expand | P2 | Route w/o test (broadened) | ✅ Complete |
 | SLO-099-expand | P2 | Response field changed test | 🚧 Not started |
 | SLO-100-broaden | P2 | Stub returns (broadened) | 🚧 Not started |
 | SLO-151 | P3 | Orphaned test | 🚧 Not started |

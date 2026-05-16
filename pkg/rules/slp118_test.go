@@ -346,6 +346,28 @@ func TestSLP118_EarlyExitGuardScopedToBlock(t *testing.T) {
 	}
 }
 
+func TestSLP118_EarlyExitGuardSpansHunkBoundary(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc.go b/svc.go
+--- a/svc.go
++++ b/svc.go
+@@ -3,3 +3,6 @@
+ func process() {
+ 	items := load()
++	if len(items) == 0 {
++		return
++	}
+ 	log("have items")
+@@ -18,2 +21,3 @@
+ 	prepare()
++	first := items[0]
+ 	use(first)
+`)
+	got := SLP118{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings: guard in hunk 1 should cover items[0] in hunk 2, got %d", len(got))
+	}
+}
+
 func TestSLP118_Description(t *testing.T) {
 	r := SLP118{}
 	if r.ID() != "SLP118" {

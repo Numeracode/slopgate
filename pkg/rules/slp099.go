@@ -30,18 +30,47 @@ var slp099GoStructField = regexp.MustCompile(
 
 var slp099TSInterfaceProp = regexp.MustCompile(`(?i)^(?:readonly\s+)?\w+(?:\?)?:\s*(?:string|number|boolean|Date|\[\]\w+|\w+\[\])[;,]?(?:\s*//.*)?$`)
 
+// slp099PythonField matches Python dataclass/Pydantic model field definitions.
+// Covers: field: Type, field: Type = default, field: Optional[Type], field: list[Type]
+var slp099PythonField = regexp.MustCompile(
+	`^\s*[a-z_]\w*\s*:\s*(?:` +
+		`(?:Optional|List|Dict|Set|Tuple|Any|str|int|float|bool|bytes|datetime)` +
+		`|\w+` +
+		`)(?:\[.*?\])?(?:\s*=\s*.+)?(?:\s*#.*)?$`,
+)
+
 var slp099ResponseKeywords = map[string]struct{}{
 	"response": {},
 	"dto":      {},
 	"output":   {},
 	"result":   {},
 	"payload":  {},
+	"body":     {},
+	"reply":    {},
+	"envelope": {},
+	"wrapper":  {},
 }
 
 var slp099IgnoredTrailingTokens = map[string]struct{}{
 	"model":  {},
 	"schema": {},
 	"type":   {},
+	"types":  {},
+	"config": {},
+	"util":   {},
+	"helper": {},
+}
+
+// slp099UtilitySuffixes are filename suffixes that indicate a utility/helper
+// file rather than an API response type, even if the stem contains a response
+// keyword (e.g., result_cache.ts, response_util.go).
+var slp099UtilitySuffixes = []string{
+	"_cache", ".cache",
+	"_util", ".util",
+	"_helper", ".helper",
+	"_config", ".config",
+	"_factory", ".factory",
+	"_builder", ".builder",
 }
 
 var slp099CamelBoundaryLowerToUpper = regexp.MustCompile(`([a-z0-9])([A-Z])`)
@@ -50,6 +79,14 @@ var slp099NonAlnum = regexp.MustCompile(`[^A-Za-z0-9]+`)
 var slp099VersionToken = regexp.MustCompile(`^v?\d+$`)
 
 func hasResponseKeyword(name string) bool {
+	// Reject utility/helper files even if they contain a response keyword.
+	lower := strings.ToLower(name)
+	stem := slp099TrimKnownExt(path.Base(lower))
+	for _, suffix := range slp099UtilitySuffixes {
+		if strings.HasSuffix(stem, suffix) {
+			return false
+		}
+	}
 	tokens := slp099FilenameTokens(name)
 	for i := len(tokens) - 1; i >= 0; i-- {
 		tok := tokens[i]
@@ -73,6 +110,9 @@ func matchesSlp099FieldLine(filePath, content string) bool {
 	}
 	if isJSOrTSFile(filePath) {
 		return slp099TSInterfaceProp.MatchString(content)
+	}
+	if isPythonFile(filePath) {
+		return slp099PythonField.MatchString(content)
 	}
 	return false
 }
@@ -104,11 +144,11 @@ func (r SLP099) Check(d *diff.Diff) []Finding {
 		if f.IsDelete || isDocFile(f.Path) {
 			continue
 		}
-		if isTestFile(f.Path) {
+		if isTestFile(f.Path) || isPythonTestFile(f.Path) {
 			changedTestFiles[f.Path] = true
 			continue
 		}
-		if !isGoFile(f.Path) && !isJSOrTSFile(f.Path) {
+		if !isGoFile(f.Path) && !isJSOrTSFile(f.Path) && !isPythonFile(f.Path) {
 			continue
 		}
 
@@ -202,6 +242,8 @@ func testMatchesResponse(respPath string, testFiles map[string]bool) bool {
 func slp099FileStem(filePath string) string {
 	base := path.Base(filePath)
 	stem := slp099TrimKnownExt(base)
+	// Python's pytest convention puts the marker as a `test_` prefix.
+	stem = strings.TrimPrefix(stem, "test_")
 	switch {
 	case strings.HasSuffix(stem, "_test"):
 		return strings.TrimSuffix(stem, "_test")
@@ -218,5 +260,28 @@ func slp099RelatedDir(respDir, testDir string) bool {
 	if respDir == testDir {
 		return true
 	}
-	return path.Dir(testDir) == respDir || path.Dir(respDir) == testDir
+	if path.Dir(testDir) == respDir || path.Dir(respDir) == testDir {
+		return true
+	}
+	// Parallel test directories: src/foo → tests/foo, src/foo → test/foo
+	for _, testRoot := range []string{"tests", "test", "__tests__", "specs"} {
+		if strings.HasPrefix(testDir, testRoot+"/") || testDir == testRoot {
+			remainder := strings.TrimPrefix(testDir, testRoot)
+			remainder = strings.TrimPrefix(remainder, "/")
+			if remainder == "" {
+				// Test sits directly in the test root; relate it to a
+				// source file at the project root or in a single
+				// top-level directory (src/, lib/), but not one nested
+				// at arbitrary depth.
+				if respDir == "" || respDir == "." || !strings.Contains(respDir, "/") {
+					return true
+				}
+				continue
+			}
+			if respDir == remainder || strings.HasSuffix(respDir, "/"+remainder) {
+				return true
+			}
+		}
+	}
+	return false
 }

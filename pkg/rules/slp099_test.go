@@ -150,3 +150,164 @@ func TestSLP099_Description(t *testing.T) {
 		t.Errorf("default severity should be warn")
 	}
 }
+
+func TestSLP099_PythonDataclassField(t *testing.T) {
+	d := parseDiff(t, `diff --git a/response.py b/response.py
+--- a/response.py
++++ b/response.py
+@@ -1,3 +1,4 @@
+ @dataclass
+ class ItemResponse:
+     id: int
++    slug: str
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for Python response field without test")
+	}
+}
+
+func TestSLP099_PydanticModelField(t *testing.T) {
+	d := parseDiff(t, `diff --git a/dto.py b/dto.py
+--- a/dto.py
++++ b/dto.py
+@@ -1,3 +1,4 @@
+ class UserDto(BaseModel):
+     name: str
++    email: str
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for Pydantic model field without test")
+	}
+}
+
+func TestSLP099_BodyKeyword(t *testing.T) {
+	d := parseDiff(t, `diff --git a/body.go b/body.go
+--- a/body.go
++++ b/body.go
+@@ -1,3 +1,4 @@
+ type ResponseBody struct {
++    Data string `+"`json:\"data\"`"+`
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for body keyword file without test")
+	}
+}
+
+func TestSLP099_ReplyKeyword(t *testing.T) {
+	d := parseDiff(t, `diff --git a/reply.ts b/reply.ts
+--- a/reply.ts
++++ b/reply.ts
+@@ -1,3 +1,4 @@
+ export interface Reply {
++  text: string;
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for reply keyword file without test")
+	}
+}
+
+func TestSLP099_ParallelTestDir(t *testing.T) {
+	d := parseDiff(t, `diff --git a/src/response.ts b/src/response.ts
+--- a/src/response.ts
++++ b/src/response.ts
+@@ -1,3 +1,4 @@
+ export interface ApiResponse {
++  slug: string;
+ }
+diff --git a/tests/response.test.ts b/tests/response.test.ts
+--- a/tests/response.test.ts
++++ b/tests/response.test.ts
+@@ -1,1 +1,2 @@
++  test("response", () => {})
+`)
+	got := SLP099{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings when parallel test dir modified, got %d", len(got))
+	}
+}
+
+func TestSLP099_IgnoresResponseUtilFile(t *testing.T) {
+	d := parseDiff(t, `diff --git a/response_util.ts b/response_util.ts
+--- a/response_util.ts
++++ b/response_util.ts
+@@ -1,3 +1,4 @@
+ export interface ResponseUtilEntry {
++  slug: string;
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for response_util.ts, got %d", len(got))
+	}
+}
+
+func TestSLP099_IgnoresResponseUtilDeclarationFile(t *testing.T) {
+	d := parseDiff(t, `diff --git a/response_util.d.ts b/response_util.d.ts
+--- a/response_util.d.ts
++++ b/response_util.d.ts
+@@ -1,3 +1,4 @@
+ export interface ResponseUtilEntry {
++  slug: string;
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for response_util.d.ts, got %d", len(got))
+	}
+}
+
+func TestSLP099_FiresWhenNestedSourceHasOnlyRootTest(t *testing.T) {
+	d := parseDiff(t, `diff --git a/src/api/v2/response.ts b/src/api/v2/response.ts
+--- a/src/api/v2/response.ts
++++ b/src/api/v2/response.ts
+@@ -1,3 +1,4 @@
+ export interface ApiResponse {
++  slug: string;
+ }
+diff --git a/tests/response.test.ts b/tests/response.test.ts
+--- a/tests/response.test.ts
++++ b/tests/response.test.ts
+@@ -1,1 +1,2 @@
++  test("response", () => {})
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding: a deeply nested response file is not covered by a root tests/ test")
+	}
+}
+
+func TestSLP099_IgnoresResponseFactoryFile(t *testing.T) {
+	d := parseDiff(t, `diff --git a/response_factory.go b/response_factory.go
+--- a/response_factory.go
++++ b/response_factory.go
+@@ -1,3 +1,4 @@
+ type ResponseFactory struct {
++    Slug string `+"`json:\"slug\"`"+`
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for response_factory.go, got %d", len(got))
+	}
+}
+
+func TestSLP099_FiresOnResponseTypesFile(t *testing.T) {
+	d := parseDiff(t, `diff --git a/response_types.ts b/response_types.ts
+--- a/response_types.ts
++++ b/response_types.ts
+@@ -1,3 +1,4 @@
+ export interface ApiResponse {
++  slug: string;
+ }
+`)
+	got := SLP099{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for response_types.ts (types is ignored, response is keyword)")
+	}
+}

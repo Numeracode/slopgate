@@ -20,6 +20,8 @@ func (SLP098) Description() string {
 	return "new route/handler added without test — add a test for the new endpoint"
 }
 
+// slp098RoutePatterns matches explicit route registration calls across
+// frameworks (Express, Fastify, Koa, Go, Spring, Flask, FastAPI, etc.).
 var slp098RoutePatterns = []*regexp.Regexp{
 	// Express.js and general Node.js routers
 	regexp.MustCompile(`(?i)(?:app|router|r)\.(?:get|post|put|delete|patch|head|options|use|all)\s*\(`),
@@ -27,6 +29,12 @@ var slp098RoutePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(?:app|router|r)\.param\s*\(`),
 	// Express.js static file serving
 	regexp.MustCompile(`(?i)(?:app|router|r)\.static\s*\(`),
+	// Fastify
+	regexp.MustCompile(`(?i)(?:fastify|server)\.(?:get|post|put|delete|patch|head|options|route)\s*\(`),
+	// Koa
+	regexp.MustCompile(`(?i)(?:app|router)\.(?:get|post|put|delete|patch|head|options|use)\s*\(`),
+	// Hapi
+	regexp.MustCompile(`(?i)server\.route\s*\(\s*\{`),
 	// Next.js API route handlers - function declaration form (HTTP method names only)
 	regexp.MustCompile(`(?i)export\s+(?:async\s+)?function\s+(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s*\(`),
 	// Next.js API route handlers - default function (export default function handler)
@@ -38,13 +46,32 @@ var slp098RoutePatterns = []*regexp.Regexp{
 	// Go HTTP handlers
 	regexp.MustCompile(`(?i)\.(?:HandleFunc|Handle)\s*\(`),
 	regexp.MustCompile(`(?i)(?:mux|router)\.(?:HandleFunc|Handle|NewRoute)\s*\(`),
+	// Go Gin
+	regexp.MustCompile(`(?i)(?:r|engine|gin)\.(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Any|Group)\s*\(`),
+	// Go Echo
+	regexp.MustCompile(`(?i)(?:e|echo)\.(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Any|Group)\s*\(`),
+	// Go Fiber
+	regexp.MustCompile(`(?i)(?:app|fiber)\.(?:Get|Post|Put|Delete|Patch|Head|Options|Use|All|Group)\s*\(`),
 	// Generic route group/router patterns
 	regexp.MustCompile(`(?i)(?:group|route)\s*\(\s*["'\x60]/`),
 	// Python/Flask patterns
 	regexp.MustCompile(`(?i)@(?:route|app\.route|blueprint\.route)\s*\(`),
+	// Python/FastAPI
+	regexp.MustCompile(`(?i)@(?:app|router)\.(?:get|post|put|delete|patch|head|options)\s*\(`),
+	// Python/Django URL patterns
+	regexp.MustCompile(`(?i)(?:path|re_path|url)\s*\(\s*["'\x60]`),
+	// Ruby on Rails
+	regexp.MustCompile(`(?i)(?:get|post|put|delete|patch|resources|resource)\s+["'\x60]/`),
 	// Various handler patterns
 	regexp.MustCompile(`(?i)\.(?:AddRoute|MapPath|HandlePath)\s*\(`),
+	// tRPC routers
+	regexp.MustCompile(`(?i)(?:router|publicProcedure|protectedProcedure)\.`),
 }
+
+// slp098RouteFileNames matches filenames that are likely route/handler files
+// even when the route registration patterns above don't match (e.g., file-based
+// routing in Next.js, or config-driven routers).
+var slp098RouteFileNames = regexp.MustCompile(`(?i)(?:^|/)(?:routes?|api(?:s)?|endpoints?|handlers?|controllers?|rest)(?:/|[^/]*\.(?:go|ts|tsx|js|jsx|py|java|rb)$)`)
 
 func (r SLP098) Check(d *diff.Diff) []Finding {
 	var out []Finding
@@ -71,17 +98,24 @@ func (r SLP098) Check(d *diff.Diff) []Finding {
 			continue
 		}
 
+		isRouteFile := false
 		for _, ln := range f.AddedLines() {
 			content := strings.TrimSpace(ln.Content)
 			for _, pat := range slp098RoutePatterns {
 				if pat.MatchString(content) {
+					isRouteFile = true
 					routeFiles[f.Path] = true
 					break
 				}
 			}
-			if routeFiles[f.Path] {
+			if isRouteFile {
 				break
 			}
+		}
+		// Also flag files that look like route/handler files by naming convention
+		// (covers file-based routing, config-driven routers, etc.)
+		if !isRouteFile && f.IsNew && slp098RouteFileNames.MatchString(f.Path) {
+			routeFiles[f.Path] = true
 		}
 	}
 
@@ -103,10 +137,15 @@ func (r SLP098) Check(d *diff.Diff) []Finding {
 		}
 
 		if !foundTest {
-			// Emit findings for this file using direct lookup
 			f, ok := fileByPath[rf]
 			if ok {
-				for _, ln := range f.AddedLines() {
+				addedLines := f.AddedLines()
+				if len(addedLines) == 0 {
+					continue
+				}
+				// Check if any added line matches a route pattern
+				hasRouteLine := false
+				for _, ln := range addedLines {
 					for _, pat := range slp098RoutePatterns {
 						if pat.MatchString(ln.Content) {
 							out = append(out, Finding{
@@ -117,9 +156,24 @@ func (r SLP098) Check(d *diff.Diff) []Finding {
 								Message:  "new route added without corresponding test changes for this module in this diff",
 								Snippet:  ln.Content,
 							})
+							hasRouteLine = true
 							break
 						}
 					}
+					if hasRouteLine {
+						break
+					}
+				}
+				// File detected by naming convention — flag on first added line
+				if !hasRouteLine && slp098RouteFileNames.MatchString(f.Path) {
+					out = append(out, Finding{
+						RuleID:   r.ID(),
+						Severity: r.DefaultSeverity(),
+						File:     f.Path,
+						Line:     addedLines[0].NewLineNo,
+						Message:  "new route/handler file added without corresponding test file",
+						Snippet:  addedLines[0].Content,
+					})
 				}
 			}
 		}

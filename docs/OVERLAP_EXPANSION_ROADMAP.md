@@ -27,7 +27,7 @@ Rules SLP081–100 were added for CR parity but underperform.
 
 | Task ID | Rule | Current Overlap | Enhancement | Expected Δ |
 |---------|------|----------------|-------------|------------|
-| **SLO-098-expand** | SLP098 | 3 | Detect new express/next route + missing test file | +3–5 overlap |
+| **SLO-098-expand** | SLP098 | 3 | Detect new express/next route + missing test file | +3–5 overlap | ✅ Complete — added Fastify, FastAPI, Gin, Echo, Fiber, Django, tRPC patterns + file-based route detection (10 new tests) |
 | **SLO-099-expand** | SLP099 | 5 | Track response field rename/removal + test not updated | +2–4 overlap |
 | **SLO-100-broaden** | SLP100 | 0 | Add patterns: `return nil`, `return ""`, stubs with TODO comment | +2–6 overlap |
 

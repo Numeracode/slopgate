@@ -155,10 +155,26 @@ func hasSideEffect(line string) bool {
 	if slp100ConsoleLogStub.MatchString(trimmed) {
 		return false
 	}
-	if trimmed == "" || trimmed == "{" || trimmed == "}" {
+	// A line consisting only of structural punctuation — `}`, `};`, `})`,
+	// `},` etc. — is not work. Without this an arrow function's `};`
+	// closing line would be mistaken for a side effect.
+	if strings.Trim(trimmed, "{}()[];, \t") == "" {
 		return false
 	}
 	return true
+}
+
+// slp100Indent returns the leading-whitespace width of a raw line,
+// counting each space or tab as one unit.
+func slp100Indent(raw string) int {
+	n := 0
+	for _, c := range raw {
+		if c != ' ' && c != '\t' {
+			break
+		}
+		n++
+	}
+	return n
 }
 
 func (r SLP100) Check(d *diff.Diff) []Finding {
@@ -178,7 +194,8 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 			firstLine := true
 			var funcLineNo int
 			var funcSnippet string
-			isBraceless := false // for arrow functions and Python defs
+			isBraceless := false // for Python defs whose body is on later lines
+			funcIndent := 0      // indentation of the current braceless def
 
 			for _, ln := range h.Lines {
 				if ln.Kind != diff.LineAdd {
@@ -186,6 +203,7 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 					continue
 				}
 				content := strings.TrimSpace(ln.Content)
+			recheck:
 
 				if !inFunc && slp100FuncStart.MatchString(stripCommentAndStrings(content)) {
 					inFunc = true
@@ -198,14 +216,15 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 
 					cleanContent := stripCommentAndStrings(content)
 
-					// Check for single-expression arrow function: => expr
+					// Arrow functions. A single-expression body (`=> expr`)
+					// is judged immediately; a block body (`=> {`) falls
+					// through to the brace-body scanning below.
 					arrowIdx := strings.Index(cleanContent, "=>")
 					if arrowIdx >= 0 {
 						expr := strings.TrimSpace(cleanContent[arrowIdx+2:])
-						expr = strings.TrimSuffix(expr, ";")
-						if expr != "" {
-							if slp100ZeroReturn.MatchString("return " + expr) {
-								// Single-line arrow stub — emit immediately
+						if !strings.HasPrefix(expr, "{") {
+							expr = strings.TrimSuffix(expr, ";")
+							if expr != "" && slp100ZeroReturn.MatchString("return "+expr) {
 								out = append(out, Finding{
 									RuleID:   r.ID(),
 									Severity: r.DefaultSeverity(),
@@ -215,9 +234,9 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 									Snippet:  funcSnippet,
 								})
 							}
+							inFunc = false
+							continue
 						}
-						inFunc = false
-						continue
 					}
 
 					// Check for Python def with pass/raise on same line: def f(): pass
@@ -238,8 +257,9 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 							inFunc = false
 							continue
 						}
-						// Empty after colon — body is on next line(s), track as braceless
+						// Empty after colon — body is on next line(s).
 						isBraceless = true
+						funcIndent = slp100Indent(ln.Content)
 						continue
 					}
 
@@ -274,29 +294,14 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 				if inFunc {
 					cleanContent := stripCommentAndStrings(content)
 
-					// For braceless functions (Python), check if the line is a stub statement
+					// Braceless Python defs: the body is every line indented
+					// deeper than the `def`. A non-blank line at or below the
+					// def's indentation (a sibling def, a dedent, module-level
+					// code) ends the function.
 					if isBraceless {
 						trimmedClean := strings.TrimSpace(cleanContent)
-						if slp100PythonPass.MatchString(trimmedClean) || slp100RaiseNotImplemented.MatchString(trimmedClean) {
-							// stub body — emit immediately
-							out = append(out, Finding{
-								RuleID:   r.ID(),
-								Severity: r.DefaultSeverity(),
-								File:     f.Path,
-								Line:     funcLineNo,
-								Message:  "function appears to be a no-op stub — implement the body or add a TODO if intentional",
-								Snippet:  funcSnippet,
-							})
-							inFunc = false
-							continue
-						}
-						// Any other non-empty line means the function has work
-						if trimmedClean != "" {
-							hasWork = true
-						}
-						// Python functions end when indentation returns to 0 or a new def/class starts
-						if strings.HasPrefix(cleanContent, "def ") || strings.HasPrefix(cleanContent, "class ") ||
-							(cleanContent != "" && !strings.HasPrefix(cleanContent, " ") && !strings.HasPrefix(cleanContent, "\t")) {
+
+						if trimmedClean != "" && slp100Indent(ln.Content) <= funcIndent {
 							if !hasWork {
 								out = append(out, Finding{
 									RuleID:   r.ID(),
@@ -308,6 +313,25 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 								})
 							}
 							inFunc = false
+							// This line may itself open the next function.
+							goto recheck
+						}
+
+						if trimmedClean != "" {
+							if slp100PythonPass.MatchString(trimmedClean) || slp100RaiseNotImplemented.MatchString(trimmedClean) {
+								out = append(out, Finding{
+									RuleID:   r.ID(),
+									Severity: r.DefaultSeverity(),
+									File:     f.Path,
+									Line:     funcLineNo,
+									Message:  "function appears to be a no-op stub — implement the body or add a TODO if intentional",
+									Snippet:  funcSnippet,
+								})
+								inFunc = false
+								continue
+							}
+							// Any other body line means the function has work.
+							hasWork = true
 						}
 						continue
 					}

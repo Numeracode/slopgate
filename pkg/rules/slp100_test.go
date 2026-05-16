@@ -277,3 +277,50 @@ func TestSLP100_VoidZeroReturn(t *testing.T) {
 		t.Fatal("expected findings for return void 0")
 	}
 }
+
+func TestSLP100_BlockArrowStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,4 @@
++const getItems = () => {
++    return null;
++};
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected findings for block-bodied arrow function stub")
+	}
+}
+
+func TestSLP100_NoFireOnBlockArrowWithWork(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,4 @@
++const getItems = () => {
++    return fetchItems();
++};
+`)
+	got := SLP100{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for block arrow with real work, got %d", len(got))
+	}
+}
+
+func TestSLP100_PythonStubMethodBeforeSibling(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc.py b/svc.py
+--- a/svc.py
++++ b/svc.py
+@@ -1,1 +1,6 @@
++class Service:
++    def load(self):
++        pass
++    def run(self):
++        return compute()
+`)
+	got := SLP100{}.Check(d)
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 finding (the load() stub), got %d", len(got))
+	}
+}

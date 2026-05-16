@@ -242,9 +242,9 @@ func slp118EmptyCheckCollections(line string, isJS bool) []string {
 // `if len(x) == 0 { return }`. After such a guard x has at least one
 // element, so x[0] is safe for the remainder of the enclosing block.
 type slp118EarlyGuard struct {
-	collection string
-	indent     int // indentation of the `if`
-	afterIdx   int // active for hunk line indices strictly greater than this
+	collection  string
+	indent      int // indentation of the `if`
+	afterLineNo int // active once the new-file line with this number is reached
 }
 
 // slp118IsIfLine reports whether a stripped line opens a conditional.
@@ -260,14 +260,20 @@ func slp118IsIfLine(s string) bool {
 // block's final line and true. Brace blocks end at a `}` aligned with
 // the opener; indentation blocks end on dedent. Requiring a sole exit
 // statement prevents `if len(x) == 0 { log() }` from being mistaken for
-// an early-exit guard.
-func slp118SingleExitBlock(stripped []string, indents []int, openIdx int) (int, bool) {
+// an early-exit guard. Detection bails if the scan crosses a diff hunk
+// boundary (a gap in new-file line numbers) so a guard is never
+// inferred across elided, unseen code.
+func slp118SingleExitBlock(stripped []string, indents []int, lineNos []int, openIdx int) (int, bool) {
 	openIndent := indents[openIdx]
 	brace := strings.HasSuffix(stripped[openIdx], "{")
 	bodyCount := 0
 	bodyIsExit := false
 	lastBody := openIdx
 	for j := openIdx + 1; j < len(stripped); j++ {
+		// A gap in new-file line numbers means an elided hunk boundary.
+		if lineNos[j] == 0 || lineNos[j] != lineNos[j-1]+1 {
+			return 0, false
+		}
 		s := stripped[j]
 		if s == "" {
 			continue
@@ -295,15 +301,18 @@ func slp118SingleExitBlock(stripped []string, indents []int, openIdx int) (int, 
 	return 0, false
 }
 
-// slp118EarlyExitGuards scans one hunk for early-exit emptiness guards,
-// returning each with the hunk line index after which it takes effect.
+// slp118EarlyExitGuards scans the new-file view of a file (all hunks
+// concatenated, deletions removed) for early-exit emptiness guards,
+// returning each with the new-file line number after which it applies.
 func slp118EarlyExitGuards(lines []diff.Line, filePath string) []slp118EarlyGuard {
 	isJS := isJSOrTSFile(filePath)
 	stripped := make([]string, len(lines))
 	indents := make([]int, len(lines))
+	lineNos := make([]int, len(lines))
 	for i, ln := range lines {
 		indents[i] = slp118LeadingSpaces(ln.Content)
 		stripped[i] = strings.TrimSpace(stripCommentAndStrings(ln.Content))
+		lineNos[i] = ln.NewLineNo
 	}
 
 	var guards []slp118EarlyGuard
@@ -321,15 +330,15 @@ func slp118EarlyExitGuards(lines []diff.Line, filePath string) []slp118EarlyGuar
 			// Single-line form: `if len(x) == 0 { return }`.
 			afterIdx = i
 		} else if strings.HasSuffix(s, "{") || strings.HasSuffix(s, ":") {
-			if end, ok := slp118SingleExitBlock(stripped, indents, i); ok {
+			if end, ok := slp118SingleExitBlock(stripped, indents, lineNos, i); ok {
 				afterIdx = end
 			}
 		}
-		if afterIdx < 0 {
+		if afterIdx < 0 || lineNos[afterIdx] == 0 {
 			continue
 		}
 		for _, c := range cols {
-			guards = append(guards, slp118EarlyGuard{collection: c, indent: indents[i], afterIdx: afterIdx})
+			guards = append(guards, slp118EarlyGuard{collection: c, indent: indents[i], afterLineNo: lineNos[afterIdx]})
 		}
 	}
 	return guards
@@ -351,15 +360,28 @@ func (r SLP118) Check(d *diff.Diff) []Finding {
 			continue
 		}
 
+		// Concatenate every hunk's new-file lines (context + additions)
+		// so an early-exit guard in one hunk is still recognised when the
+		// access it protects appears in a later hunk of the same file.
+		var newFileLines []diff.Line
 		for _, h := range f.Hunks {
-			early := slp118EarlyExitGuards(h.Lines, f.Path)
-			// nonEmpty maps a collection to the indentation at which an
-			// early-exit guard proved it non-empty; entries are dropped
-			// once execution dedents out of that block.
-			nonEmpty := map[string]int{}
+			for _, ln := range h.Lines {
+				if ln.Kind != diff.LineDelete {
+					newFileLines = append(newFileLines, ln)
+				}
+			}
+		}
+		early := slp118EarlyExitGuards(newFileLines, f.Path)
+
+		// nonEmpty maps a collection to the indentation at which an
+		// early-exit guard proved it non-empty; entries are dropped once
+		// execution dedents out of that block. It persists across hunks.
+		nonEmpty := map[string]int{}
+
+		for _, h := range f.Hunks {
 			var currentGuards []*slp118Guard
 
-			for idx, ln := range h.Lines {
+			for _, ln := range h.Lines {
 				rawIndent := slp118LeadingSpaces(ln.Content)
 				stripped := strings.TrimSpace(stripCommentAndStrings(ln.Content))
 
@@ -413,9 +435,11 @@ func (r SLP118) Check(d *diff.Diff) []Finding {
 				}
 
 				// Activate early-exit guards whose block ends on this line.
-				for _, g := range early {
-					if g.afterIdx == idx {
-						nonEmpty[g.collection] = g.indent
+				if ln.NewLineNo != 0 {
+					for _, g := range early {
+						if g.afterLineNo == ln.NewLineNo {
+							nonEmpty[g.collection] = g.indent
+						}
 					}
 				}
 			}

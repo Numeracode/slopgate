@@ -322,6 +322,30 @@ func TestSLP118_FireWhenEmptyCheckHasNoExit(t *testing.T) {
 	}
 }
 
+func TestSLP118_EarlyExitGuardScopedToBlock(t *testing.T) {
+	d := parseDiff(t, `diff --git a/process.go b/process.go
+--- a/process.go
++++ b/process.go
+@@ -1,1 +1,11 @@
+ package main
++
++func first() {
++	items := load()
++	if len(items) == 0 {
++		return
++	}
++}
++func second() {
++	items := load()
++	head := items[0]
++}
+`)
+	got := SLP118{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding: early-exit guard in first() must not cover items[0] in second()")
+	}
+}
+
 func TestSLP118_Description(t *testing.T) {
 	r := SLP118{}
 	if r.ID() != "SLP118" {

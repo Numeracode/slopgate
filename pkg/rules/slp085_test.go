@@ -90,6 +90,19 @@ index 123..456 100644
 `,
 			expected: 1,
 		},
+		{
+			name: "regex literal with SQL-like keyword and quantifier is ok",
+			diff: `diff --git a/pkg/rules/routes.go b/pkg/rules/routes.go
+index 123..456 100644
+--- a/pkg/rules/routes.go
++++ b/pkg/rules/routes.go
+@@ -1,2 +1,3 @@
+ package rules
++
++var routeRe = regexp.MustCompile(` + "`" + `(?i)(?:get|post|delete|patch)\s+["']/` + "`" + `)
+`,
+			expected: 0,
+		},
 	}
 
 	for _, tt := range tests {

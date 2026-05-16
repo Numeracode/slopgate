@@ -23,6 +23,13 @@ var slp118GoGuardRe = regexp.MustCompile(`len\((.+?)\)\s*>\s*(\d+)|len\((.+?)\)\
 var slp118JSGuardRe = regexp.MustCompile(`([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*>\s*(\d+)|([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*>=\s*(\d+)`)
 var slp118PyGuardRe = regexp.MustCompile(`len\((.+?)\)\s*>\s*(\d+)|len\((.+?)\)\s*>=\s*(\d+)`)
 
+// Early-exit emptiness guards: `len(x) == 0`, `len(x) < 1`, `len(x) <= 0`
+// (Go/Python) and the `.length` equivalents plus `!x.length` (JS/TS).
+var slp118EmptyLenRe = regexp.MustCompile(`len\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\)\s*(?:==\s*0\b|<\s*1\b|<=\s*0\b)`)
+var slp118EmptyJSRe = regexp.MustCompile(`([A-Za-z_$][A-Za-z0-9_$]*)\??\.length\s*(?:===?\s*0\b|<\s*1\b|<=\s*0\b)`)
+var slp118EmptyJSNotRe = regexp.MustCompile(`!\s*([A-Za-z_$][A-Za-z0-9_$]*)\??\.length\b`)
+var slp118ExitRe = regexp.MustCompile(`\b(?:return|continue|break|panic|throw)\b`)
+
 type slp118Guard struct {
 	collection  string
 	bound       int
@@ -136,11 +143,7 @@ func slp118CollectionOfAccess(content string, matchLoc []int) string {
 	return ""
 }
 
-func slp118AllIndicesGuarded(guards []*slp118Guard, content string) bool {
-	if len(guards) == 0 {
-		return false
-	}
-
+func slp118AllIndicesGuarded(guards []*slp118Guard, nonEmpty map[string]int, content string) bool {
 	locs := slp118IndexRe.FindAllStringIndex(content, -1)
 	for _, loc := range locs {
 		end := loc[1]
@@ -156,6 +159,14 @@ func slp118AllIndicesGuarded(guards []*slp118Guard, content string) bool {
 			continue
 		}
 		idx := atoiSafe(idxMatch[1])
+
+		// An early-exit guard such as `if len(x) == 0 { return }`
+		// proves x has at least one element, so x[0] is safe.
+		if idx == 0 && collection != "" {
+			if _, ok := nonEmpty[collection]; ok {
+				continue
+			}
+		}
 
 		guarded := false
 		for _, guard := range guards {
@@ -192,14 +203,136 @@ func isAlpha(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
-func slp118CheckAccess(content string, guards []*slp118Guard) bool {
+func slp118CheckAccess(content string, guards []*slp118Guard, nonEmpty map[string]int) bool {
 	if !slp118IsIndexAccess(content) {
 		return false
 	}
-	if len(guards) > 0 && slp118AllIndicesGuarded(guards, content) {
+	if slp118AllIndicesGuarded(guards, nonEmpty, content) {
 		return false
 	}
 	return true
+}
+
+// slp118EmptyCheckCollections returns the collection names that a line
+// tests for emptiness (e.g. `len(x) == 0`, `x.length < 1`, `!x.length`).
+func slp118EmptyCheckCollections(line string, isJS bool) []string {
+	var res []string
+	if isJS {
+		for _, m := range slp118EmptyJSRe.FindAllStringSubmatch(line, -1) {
+			if len(m) > 1 {
+				res = append(res, m[1])
+			}
+		}
+		for _, m := range slp118EmptyJSNotRe.FindAllStringSubmatch(line, -1) {
+			if len(m) > 1 {
+				res = append(res, m[1])
+			}
+		}
+		return res
+	}
+	for _, m := range slp118EmptyLenRe.FindAllStringSubmatch(line, -1) {
+		if len(m) > 1 {
+			res = append(res, m[1])
+		}
+	}
+	return res
+}
+
+// slp118EarlyGuard records an early-exit emptiness guard such as
+// `if len(x) == 0 { return }`. After such a guard x has at least one
+// element, so x[0] is safe for the remainder of the enclosing block.
+type slp118EarlyGuard struct {
+	collection string
+	indent     int // indentation of the `if`
+	afterIdx   int // active for hunk line indices strictly greater than this
+}
+
+// slp118IsIfLine reports whether a stripped line opens a conditional.
+func slp118IsIfLine(s string) bool {
+	if strings.HasPrefix(s, "if ") || strings.HasPrefix(s, "if(") {
+		return true
+	}
+	return strings.HasPrefix(s, "} else if") || strings.HasPrefix(s, "else if")
+}
+
+// slp118SingleExitBlock inspects the block opened at openIdx. If the
+// body is exactly one control-flow exit it returns the index of the
+// block's final line and true. Brace blocks end at a `}` aligned with
+// the opener; indentation blocks end on dedent. Requiring a sole exit
+// statement prevents `if len(x) == 0 { log() }` from being mistaken for
+// an early-exit guard.
+func slp118SingleExitBlock(stripped []string, indents []int, openIdx int) (int, bool) {
+	openIndent := indents[openIdx]
+	brace := strings.HasSuffix(stripped[openIdx], "{")
+	bodyCount := 0
+	bodyIsExit := false
+	lastBody := openIdx
+	for j := openIdx + 1; j < len(stripped); j++ {
+		s := stripped[j]
+		if s == "" {
+			continue
+		}
+		if brace {
+			if s == "}" && indents[j] == openIndent {
+				if bodyCount == 1 && bodyIsExit {
+					return j, true
+				}
+				return 0, false
+			}
+		} else if indents[j] <= openIndent {
+			break
+		}
+		bodyCount++
+		if bodyCount > 1 {
+			return 0, false
+		}
+		bodyIsExit = slp118ExitRe.MatchString(s)
+		lastBody = j
+	}
+	if !brace && bodyCount == 1 && bodyIsExit {
+		return lastBody, true
+	}
+	return 0, false
+}
+
+// slp118EarlyExitGuards scans one hunk for early-exit emptiness guards,
+// returning each with the hunk line index after which it takes effect.
+func slp118EarlyExitGuards(lines []diff.Line, filePath string) []slp118EarlyGuard {
+	isJS := isJSOrTSFile(filePath)
+	stripped := make([]string, len(lines))
+	indents := make([]int, len(lines))
+	for i, ln := range lines {
+		indents[i] = slp118LeadingSpaces(ln.Content)
+		stripped[i] = strings.TrimSpace(stripCommentAndStrings(ln.Content))
+	}
+
+	var guards []slp118EarlyGuard
+	for i, s := range stripped {
+		if s == "" || !slp118IsIfLine(s) {
+			continue
+		}
+		cols := slp118EmptyCheckCollections(s, isJS)
+		if len(cols) == 0 {
+			continue
+		}
+
+		afterIdx := -1
+		if slp118ExitRe.MatchString(s) {
+			// Single-line form: `if len(x) == 0 { return }`.
+			afterIdx = i
+		} else if strings.HasSuffix(s, "{") || strings.HasSuffix(s, ":") {
+			if end, ok := slp118SingleExitBlock(stripped, indents, i); ok {
+				afterIdx = end
+			}
+		}
+		if afterIdx < 0 {
+			continue
+		}
+		for _, c := range cols {
+			guards = append(guards, slp118EarlyGuard{collection: c, indent: indents[i], afterIdx: afterIdx})
+		}
+	}
+	return guards
 }
 
 func slp118IsCommentLine(content string) bool {
@@ -219,59 +352,70 @@ func (r SLP118) Check(d *diff.Diff) []Finding {
 		}
 
 		for _, h := range f.Hunks {
+			early := slp118EarlyExitGuards(h.Lines, f.Path)
+			// nonEmpty maps a collection to the indentation at which an
+			// early-exit guard proved it non-empty; entries are dropped
+			// once execution dedents out of that block.
+			nonEmpty := map[string]int{}
 			var currentGuards []*slp118Guard
-			for _, ln := range h.Lines {
+
+			for idx, ln := range h.Lines {
 				rawIndent := slp118LeadingSpaces(ln.Content)
-				stripped := stripCommentAndStrings(ln.Content)
-				stripped = strings.TrimSpace(stripped)
-				if stripped == "" {
-					continue
+				stripped := strings.TrimSpace(stripCommentAndStrings(ln.Content))
+
+				if stripped != "" {
+					for col, ind := range nonEmpty {
+						if rawIndent < ind {
+							delete(nonEmpty, col)
+						}
+					}
+
+					if ln.Kind == diff.LineAdd {
+						if slp118IsBlockEnd(stripped) {
+							if len(currentGuards) > 0 && rawIndent <= currentGuards[0].startIndent {
+								currentGuards = nil
+							}
+						} else {
+							if len(currentGuards) > 0 && rawIndent <= currentGuards[0].startIndent {
+								if len(slp118ExtractGuards(stripped, f.Path)) == 0 {
+									currentGuards = nil
+								}
+							}
+
+							guards := slp118ExtractGuards(stripped, f.Path)
+							if len(guards) > 0 {
+								for _, g := range guards {
+									g.startIndent = rawIndent
+								}
+								currentGuards = guards
+							}
+
+							if !slp118IsCommentLine(stripped) && slp118CheckAccess(stripped, currentGuards, nonEmpty) {
+								out = append(out, Finding{
+									RuleID:   r.ID(),
+									Severity: r.DefaultSeverity(),
+									File:     f.Path,
+									Line:     ln.NewLineNo,
+									Message:  "direct index access without length guard — may panic on empty collection",
+									Snippet:  ln.Content,
+								})
+							}
+						}
+					} else {
+						guards := slp118ExtractGuards(stripped, f.Path)
+						if len(guards) > 0 {
+							for _, g := range guards {
+								g.startIndent = rawIndent
+							}
+							currentGuards = guards
+						}
+					}
 				}
 
-				if ln.Kind == diff.LineAdd {
-					if slp118IsBlockEnd(stripped) {
-						if len(currentGuards) > 0 && rawIndent <= currentGuards[0].startIndent {
-							currentGuards = nil
-						}
-						continue
-					}
-
-					if len(currentGuards) > 0 && rawIndent <= currentGuards[0].startIndent {
-						guards := slp118ExtractGuards(stripped, f.Path)
-						if len(guards) == 0 {
-							currentGuards = nil
-						}
-					}
-
-					guards := slp118ExtractGuards(stripped, f.Path)
-					if len(guards) > 0 {
-						for _, g := range guards {
-							g.startIndent = rawIndent
-						}
-						currentGuards = guards
-					}
-
-					if slp118IsCommentLine(stripped) {
-						continue
-					}
-
-					if slp118CheckAccess(stripped, currentGuards) {
-						out = append(out, Finding{
-							RuleID:   r.ID(),
-							Severity: r.DefaultSeverity(),
-							File:     f.Path,
-							Line:     ln.NewLineNo,
-							Message:  "direct index access without length guard — may panic on empty collection",
-							Snippet:  ln.Content,
-						})
-					}
-				} else {
-					guards := slp118ExtractGuards(stripped, f.Path)
-					if len(guards) > 0 {
-						for _, g := range guards {
-							g.startIndent = rawIndent
-						}
-						currentGuards = guards
+				// Activate early-exit guards whose block ends on this line.
+				for _, g := range early {
+					if g.afterIdx == idx {
+						nonEmpty[g.collection] = g.indent
 					}
 				}
 			}

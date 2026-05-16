@@ -308,6 +308,36 @@ func TestSLP100_NoFireOnBlockArrowWithWork(t *testing.T) {
 	}
 }
 
+func TestSLP100_PythonOneLineReturnNoneStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc.py b/svc.py
+--- a/svc.py
++++ b/svc.py
+@@ -1,1 +1,2 @@
++def get_items(): return None
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding for a one-line def that returns None")
+	}
+}
+
+func TestSLP100_NoFireOnConditionalPanic(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc.go b/svc.go
+--- a/svc.go
++++ b/svc.go
+@@ -1,1 +1,6 @@
++func process(x int) int {
++	if x < 0 { panic("not implemented") }
++	result := compute(x)
++	return result
++}
+`)
+	got := SLP100{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings: a guarded panic must not mask the real work, got %d", len(got))
+	}
+}
+
 func TestSLP100_PythonStubMethodBeforeSibling(t *testing.T) {
 	d := parseDiff(t, `diff --git a/svc.py b/svc.py
 --- a/svc.py

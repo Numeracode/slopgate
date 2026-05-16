@@ -38,11 +38,14 @@ var slp100PythonPass = regexp.MustCompile(`^\s*pass\s*$`)
 // slp100RaiseNotImplemented matches Python raise NotImplementedError.
 var slp100RaiseNotImplemented = regexp.MustCompile(`(?i)^\s*raise\s+(?:NotImplementedError|NotImplemented)\b`)
 
-// slp100ThrowUnimplemented matches JS/TS throw new Error("not implemented").
-var slp100ThrowUnimplemented = regexp.MustCompile(`(?i)throw\s+(?:new\s+)?(?:Error|TypeError)\s*\(.*(?:not\s*implemented|unimplemented|todo|stub|wip)`)
+// slp100ThrowUnimplemented matches a JS/TS statement that is solely a
+// throw of an unimplemented error (anchored so a throw nested inside a
+// conditional is not treated as a stub body).
+var slp100ThrowUnimplemented = regexp.MustCompile(`(?i)^\s*throw\s+(?:new\s+)?(?:Error|TypeError)\s*\(.*(?:not\s*implemented|unimplemented|todo|stub|wip).*\)\s*;?\s*$`)
 
-// slp100PanicUnimplemented matches Go panic("not implemented").
-var slp100PanicUnimplemented = regexp.MustCompile(`(?i)panic\s*\(.*(?:not\s*implemented|unimplemented|todo|stub)`)
+// slp100PanicUnimplemented matches a Go statement that is solely a
+// panic of an unimplemented error.
+var slp100PanicUnimplemented = regexp.MustCompile(`(?i)^\s*panic\s*\(.*(?:not\s*implemented|unimplemented|todo|stub).*\)\s*;?\s*$`)
 
 // slp100ConsoleLogStub matches console.log/warn/error used as a stub body.
 var slp100ConsoleLogStub = regexp.MustCompile(`(?i)^\s*console\.(?:log|warn|error)\s*\(`)
@@ -141,8 +144,10 @@ func hasSideEffect(line string) bool {
 		}
 		return !slp100ZeroReturn.MatchString(returnLine)
 	}
-	// Check throw/panic on the ORIGINAL line (before stripping strings) since the stub marker is inside the string
-	if slp100ThrowUnimplemented.MatchString(trimmed) || slp100PanicUnimplemented.MatchString(trimmed) {
+	// Check throw/panic on the code before any trailing comment (strings
+	// are kept, since the stub marker lives inside the thrown message).
+	codeOnly := strings.TrimSpace(slp100CodeBeforeTrailingComment(line))
+	if slp100ThrowUnimplemented.MatchString(codeOnly) || slp100PanicUnimplemented.MatchString(codeOnly) {
 		return false
 	}
 	stripped := stripCommentAndStrings(line)
@@ -239,12 +244,14 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 						}
 					}
 
-					// Check for Python def with pass/raise on same line: def f(): pass
+					// Check for a one-line Python def: def f(): <body>. Any
+					// body without a side effect (pass, raise, return None,
+					// return 0, ...) makes it a no-op stub.
 					colonIdx := strings.LastIndex(cleanContent, ":")
 					if colonIdx >= 0 && isPythonFile(f.Path) {
 						afterColon := strings.TrimSpace(cleanContent[colonIdx+1:])
 						if afterColon != "" {
-							if slp100PythonPass.MatchString(afterColon) || slp100RaiseNotImplemented.MatchString(afterColon) {
+							if !hasSideEffect(afterColon) {
 								out = append(out, Finding{
 									RuleID:   r.ID(),
 									Severity: r.DefaultSeverity(),
@@ -299,9 +306,9 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 					// def's indentation (a sibling def, a dedent, module-level
 					// code) ends the function.
 					if isBraceless {
-						trimmedClean := strings.TrimSpace(cleanContent)
-
-						if trimmedClean != "" && slp100Indent(ln.Content) <= funcIndent {
+						if strings.TrimSpace(cleanContent) != "" && slp100Indent(ln.Content) <= funcIndent {
+							// Sibling def, dedent, or module-level code ends
+							// the body; judge the function at that point.
 							if !hasWork {
 								out = append(out, Finding{
 									RuleID:   r.ID(),
@@ -317,20 +324,10 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 							goto recheck
 						}
 
-						if trimmedClean != "" {
-							if slp100PythonPass.MatchString(trimmedClean) || slp100RaiseNotImplemented.MatchString(trimmedClean) {
-								out = append(out, Finding{
-									RuleID:   r.ID(),
-									Severity: r.DefaultSeverity(),
-									File:     f.Path,
-									Line:     funcLineNo,
-									Message:  "function appears to be a no-op stub — implement the body or add a TODO if intentional",
-									Snippet:  funcSnippet,
-								})
-								inFunc = false
-								continue
-							}
-							// Any other body line means the function has work.
+						// A body line counts as work only if hasSideEffect
+						// agrees — so pass, raise NotImplementedError and
+						// zero-value returns leave the function a stub.
+						if hasSideEffect(content) {
 							hasWork = true
 						}
 						continue
@@ -358,6 +355,19 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 						inFunc = false
 					}
 				}
+			}
+
+			// A braceless Python def whose body reaches the end of the hunk
+			// without any real work is still an unfinished stub.
+			if inFunc && isBraceless && !hasWork {
+				out = append(out, Finding{
+					RuleID:   r.ID(),
+					Severity: r.DefaultSeverity(),
+					File:     f.Path,
+					Line:     funcLineNo,
+					Message:  "function appears to be a no-op stub — implement the body or add a TODO if intentional",
+					Snippet:  funcSnippet,
+				})
 			}
 		}
 	}

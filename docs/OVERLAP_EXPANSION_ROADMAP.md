@@ -112,7 +112,7 @@ These slopgate-only rules are its competitive advantage.
 | SLO-058-tune | P1 | SQL concat regexp scoping fix | ✅ Complete (committed) |
 | SLO-098-expand | P2 | Route w/o test (broadened) | ✅ Complete |
 | SLO-099-expand | P2 | Response field changed test | ✅ Complete |
-| SLO-100-broaden | P2 | Stub returns (broadened) | 🚧 Not started |
+| SLO-100-broaden | P2 | Stub returns (broadened) | ✅ Complete |
 | SLO-151 | P3 | Orphaned test | 🚧 Not started |
 | SLO-152 | P3 | Dead code after partial return | 🚧 Not started |
 | SLO-017-tune | P4 | Magic number scope narrow | 🚧 Not started |

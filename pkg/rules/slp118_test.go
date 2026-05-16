@@ -246,6 +246,82 @@ func TestSLP118_ContextLineGuardHonored(t *testing.T) {
 	}
 }
 
+func TestSLP118_NoFireAfterEarlyExitGuard(t *testing.T) {
+	d := parseDiff(t, `diff --git a/process.go b/process.go
+--- a/process.go
++++ b/process.go
+@@ -1,1 +1,6 @@
+ package main
++
++items := collect()
++if len(items) == 0 {
++    return
++}
++var first = items[0]
+`)
+	got := SLP118{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings after early-exit len==0 guard, got %d", len(got))
+	}
+}
+
+func TestSLP118_NoFireAfterEarlyExitGuardContinue(t *testing.T) {
+	d := parseDiff(t, `diff --git a/process.go b/process.go
+--- a/process.go
++++ b/process.go
+@@ -1,1 +1,7 @@
+ package main
++
++for _, group := range groups {
++    lines := group.Added()
++    if len(lines) == 0 {
++        continue
++    }
++    use(lines[0])
++}
+`)
+	got := SLP118{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings after early-exit len==0 continue guard, got %d", len(got))
+	}
+}
+
+func TestSLP118_NoFireAfterEarlyExitGuardJS(t *testing.T) {
+	d := parseDiff(t, `diff --git a/app.ts b/app.ts
+--- a/app.ts
++++ b/app.ts
+@@ -1,1 +1,5 @@
+ const x = 1
++
++if (rows.length === 0) {
++  return null
++}
++const head = rows[0]
+`)
+	got := SLP118{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings after JS early-exit length===0 guard, got %d", len(got))
+	}
+}
+
+func TestSLP118_FireWhenEmptyCheckHasNoExit(t *testing.T) {
+	d := parseDiff(t, `diff --git a/process.go b/process.go
+--- a/process.go
++++ b/process.go
+@@ -1,1 +1,5 @@
+ package main
++
++if len(items) == 0 {
++    items = defaults()
++}
++var first = items[0]
+`)
+	got := SLP118{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding when len==0 check does not early-exit")
+	}
+}
+
 func TestSLP118_Description(t *testing.T) {
 	r := SLP118{}
 	if r.ID() != "SLP118" {

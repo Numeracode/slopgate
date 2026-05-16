@@ -23,6 +23,13 @@ var slp118GoGuardRe = regexp.MustCompile(`len\((.+?)\)\s*>\s*(\d+)|len\((.+?)\)\
 var slp118JSGuardRe = regexp.MustCompile(`([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*>\s*(\d+)|([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*>=\s*(\d+)`)
 var slp118PyGuardRe = regexp.MustCompile(`len\((.+?)\)\s*>\s*(\d+)|len\((.+?)\)\s*>=\s*(\d+)`)
 
+// Early-exit emptiness guards: `len(x) == 0`, `len(x) < 1`, `len(x) <= 0`
+// (Go/Python) and the `.length` equivalents plus `!x.length` (JS/TS).
+var slp118EmptyLenRe = regexp.MustCompile(`len\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\)\s*(?:==\s*0\b|<\s*1\b|<=\s*0\b)`)
+var slp118EmptyJSRe = regexp.MustCompile(`([A-Za-z_$][A-Za-z0-9_$]*)\??\.length\s*(?:===?\s*0\b|<\s*1\b|<=\s*0\b)`)
+var slp118EmptyJSNotRe = regexp.MustCompile(`!\s*([A-Za-z_$][A-Za-z0-9_$]*)\??\.length\b`)
+var slp118ExitRe = regexp.MustCompile(`\b(?:return|continue|break|panic|throw)\b`)
+
 type slp118Guard struct {
 	collection  string
 	bound       int
@@ -136,11 +143,7 @@ func slp118CollectionOfAccess(content string, matchLoc []int) string {
 	return ""
 }
 
-func slp118AllIndicesGuarded(guards []*slp118Guard, content string) bool {
-	if len(guards) == 0 {
-		return false
-	}
-
+func slp118AllIndicesGuarded(guards []*slp118Guard, nonEmpty map[string]bool, content string) bool {
 	locs := slp118IndexRe.FindAllStringIndex(content, -1)
 	for _, loc := range locs {
 		end := loc[1]
@@ -156,6 +159,12 @@ func slp118AllIndicesGuarded(guards []*slp118Guard, content string) bool {
 			continue
 		}
 		idx := atoiSafe(idxMatch[1])
+
+		// An early-exit guard such as `if len(x) == 0 { return }`
+		// proves x has at least one element, so x[0] is safe.
+		if idx == 0 && collection != "" && nonEmpty[collection] {
+			continue
+		}
 
 		guarded := false
 		for _, guard := range guards {
@@ -192,14 +201,75 @@ func isAlpha(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
-func slp118CheckAccess(content string, guards []*slp118Guard) bool {
+func slp118CheckAccess(content string, guards []*slp118Guard, nonEmpty map[string]bool) bool {
 	if !slp118IsIndexAccess(content) {
 		return false
 	}
-	if len(guards) > 0 && slp118AllIndicesGuarded(guards, content) {
+	if slp118AllIndicesGuarded(guards, nonEmpty, content) {
 		return false
 	}
 	return true
+}
+
+// slp118EmptyCheckCollections returns the collection names that a line
+// tests for emptiness (e.g. `len(x) == 0`, `x.length < 1`, `!x.length`).
+func slp118EmptyCheckCollections(line string, isJS bool) []string {
+	var cols []string
+	if isJS {
+		for _, m := range slp118EmptyJSRe.FindAllStringSubmatch(line, -1) {
+			cols = append(cols, m[1])
+		}
+		for _, m := range slp118EmptyJSNotRe.FindAllStringSubmatch(line, -1) {
+			cols = append(cols, m[1])
+		}
+		return cols
+	}
+	for _, m := range slp118EmptyLenRe.FindAllStringSubmatch(line, -1) {
+		cols = append(cols, m[1])
+	}
+	return cols
+}
+
+// slp118LookaheadExit reports whether one of the next few non-blank
+// lines is a control-flow exit — the body of an early-exit guard.
+func slp118LookaheadExit(stripped []string, start int) bool {
+	checked := 0
+	for i := start; i < len(stripped) && checked < 3; i++ {
+		s := strings.TrimSpace(stripped[i])
+		if s == "" || s == "{" {
+			continue
+		}
+		checked++
+		if slp118ExitRe.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// slp118NonEmptyAfterGuards returns collections proven non-empty by an
+// early-exit emptiness guard such as `if len(x) == 0 { return }`. After
+// such a guard x[0] cannot panic, so SLP118 must not flag it.
+func slp118NonEmptyAfterGuards(lines []diff.Line, filePath string) map[string]bool {
+	out := map[string]bool{}
+	isJS := isJSOrTSFile(filePath)
+	stripped := make([]string, len(lines))
+	for i, ln := range lines {
+		stripped[i] = stripCommentAndStrings(ln.Content)
+	}
+	for i, s := range stripped {
+		cols := slp118EmptyCheckCollections(s, isJS)
+		if len(cols) == 0 {
+			continue
+		}
+		if !slp118ExitRe.MatchString(s) && !slp118LookaheadExit(stripped, i+1) {
+			continue
+		}
+		for _, c := range cols {
+			out[c] = true
+		}
+	}
+	return out
 }
 
 func slp118IsCommentLine(content string) bool {
@@ -217,6 +287,12 @@ func (r SLP118) Check(d *diff.Diff) []Finding {
 		if !isGoFile(f.Path) && !isJSOrTSFile(f.Path) && !isPythonFile(f.Path) {
 			continue
 		}
+
+		var allLines []diff.Line
+		for _, h := range f.Hunks {
+			allLines = append(allLines, h.Lines...)
+		}
+		nonEmpty := slp118NonEmptyAfterGuards(allLines, f.Path)
 
 		for _, h := range f.Hunks {
 			var currentGuards []*slp118Guard
@@ -255,7 +331,7 @@ func (r SLP118) Check(d *diff.Diff) []Finding {
 						continue
 					}
 
-					if slp118CheckAccess(stripped, currentGuards) {
+					if slp118CheckAccess(stripped, currentGuards, nonEmpty) {
 						out = append(out, Finding{
 							RuleID:   r.ID(),
 							Severity: r.DefaultSeverity(),

@@ -69,8 +69,13 @@ func (r SLP085) Check(d *diff.Diff) []Finding {
 				}
 
 				if hasSqlKeyword {
+					// Only treat a "+" as concatenation when it appears
+					// outside of string/regex literals. A regex literal
+					// like `\s+` contains a "+" that is not concatenation.
+					codeOnly := stripCommentAndStrings(content)
+
 					// Check for string concatenation operator
-					if strings.Contains(content, "+") && (strings.Contains(content, "'") || strings.Contains(content, "\"")) {
+					if strings.Contains(codeOnly, "+") && (strings.Contains(content, "'") || strings.Contains(content, "\"")) {
 						out = append(out, Finding{
 							RuleID:   r.ID(),
 							Severity: r.DefaultSeverity(),

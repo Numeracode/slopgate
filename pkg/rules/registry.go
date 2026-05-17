@@ -153,8 +153,9 @@ func Default() *Registry {
 	r.Register(SLP146{})
 	r.Register(SLP147{})
 	r.Register(SLP148{})
-	// P3: Add new CR-flag patterns — orphaned test detection.
-	r.Register(SLP151{})
+	// P3: Add new CR-flag patterns.
+	r.Register(SLP151{}) // orphaned test detection
+	r.Register(SLP152{}) // unreachable code after a terminating if/else
 	// P1: Close Sentry bug gap — null dereference guard.
 	r.Register(SLP202{})
 	// P1: Close Sentry bug gap — DB constraint violation.

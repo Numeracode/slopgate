@@ -20,8 +20,8 @@ func (SLP081) Description() string {
 
 var (
 	slp081ReactNamespacePattern       = regexp.MustCompile(`\bReact\.`)
-	slp081ReactDefaultImportPattern   = regexp.MustCompile(`(?ms)^\s*import\s+React(?:\s*,\s*[^;]+)?\s+from\s+["']react["']\s*;?(?:\s*//.*)?\s*$`)
-	slp081ReactNamespaceImportPattern = regexp.MustCompile(`(?m)^\s*import\s+\*\s+as\s+React\s+from\s+["']react["']\s*;?(?:\s*//.*)?\s*$`)
+	slp081ReactDefaultImportPattern   = regexp.MustCompile(`(?ms)^\s*import\s+React(?:\s*,\s*[^;]+)?\s+from\s+["']react["']\s*;?`)
+	slp081ReactNamespaceImportPattern = regexp.MustCompile(`(?m)^\s*import\s+\*\s+as\s+React\s+from\s+["']react["']\s*;?`)
 )
 
 func (r SLP081) Check(d *diff.Diff) []Finding {

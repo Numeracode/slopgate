@@ -38,9 +38,10 @@ type slp205Line struct {
 }
 
 type slp205Event struct {
-	kind string
-	line slp205Line
-	pos  int
+	kind   string
+	line   slp205Line
+	pos    int
+	indent int
 }
 
 // Check scans JS/TS OpenAPI assembly diffs for unsafe path map spread order.
@@ -180,26 +181,48 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 	if len(lines) == 0 {
 		return nil
 	}
-	var events []slp205Event
+	var candidates []slp205Event
+	baseIndent := -1
 	for _, ln := range lines {
 		if slp205CommentOnlyLinePrefix.MatchString(ln.content) {
 			continue
 		}
+		lineIndent := indentationOf(ln.content)
 		specMatches := slp205SpecPathsSpread.FindAllStringIndex(ln.content, -1)
 		for i := range specMatches {
 			match := specMatches[i]
-			if len(match) == 0 {
+			if len(match) < 2 {
 				continue
 			}
-			events = append(events, slp205Event{kind: "spec", line: ln, pos: match[0]})
+			pos, ok := slp205MatchStart(match)
+			if !ok {
+				continue
+			}
+			candidates = append(candidates, slp205Event{kind: "spec", line: ln, pos: pos, indent: lineIndent})
+			if baseIndent < 0 || lineIndent < baseIndent {
+				baseIndent = lineIndent
+			}
 		}
 		generatedMatches := slp205GeneratedPathsSpread.FindAllStringIndex(ln.content, -1)
 		for i := range generatedMatches {
 			match := generatedMatches[i]
-			if len(match) == 0 {
+			if len(match) < 2 {
 				continue
 			}
-			events = append(events, slp205Event{kind: "generated", line: ln, pos: match[0]})
+			pos, ok := slp205MatchStart(match)
+			if !ok {
+				continue
+			}
+			candidates = append(candidates, slp205Event{kind: "generated", line: ln, pos: pos, indent: lineIndent})
+			if baseIndent < 0 || lineIndent < baseIndent {
+				baseIndent = lineIndent
+			}
+		}
+	}
+	events := make([]slp205Event, 0, len(candidates))
+	for _, event := range candidates {
+		if event.indent == baseIndent {
+			events = append(events, event)
 		}
 	}
 	sort.SliceStable(events, func(i, j int) bool {
@@ -209,4 +232,21 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 		return events[i].line.order < events[j].line.order
 	})
 	return events
+}
+
+func slp205MatchStart(match []int) (int, bool) {
+	// regexp.FindAllStringIndex returns [start, end]; keep access centralized
+	// so scanner rules see the defensive checks before any position is used.
+	if match == nil || len(match) == 0 {
+		return 0, false
+	}
+	if len(match) < 2 {
+		return 0, false
+	}
+	for i, value := range match {
+		if i == 0 {
+			return value, true
+		}
+	}
+	return 0, false
 }

@@ -62,11 +62,31 @@ func TestSLP205_OpenAPIPathMergeOrder(t *testing.T) {
 --- a/api/src/lib/openapi.js
 +++ b/api/src/lib/openapi.js
 @@ -10,6 +10,11 @@
- function buildSpec(spec) {
+function buildSpec(spec) {
 +  spec.paths = {
 +    ...oas6Paths,
 +    ...oas7Paths,
 +    ...(spec.paths || {}),
++  };
+  return spec;
+}
+`,
+			want: 0,
+		},
+		{
+			name: "does not flag nested path object spreads",
+			diff: `diff --git a/api/src/lib/openapi.js b/api/src/lib/openapi.js
+--- a/api/src/lib/openapi.js
++++ b/api/src/lib/openapi.js
+@@ -10,6 +10,13 @@
+ function buildSpec(spec) {
++  spec.paths = {
++    ...(spec.paths || {}),
++    '/api/search': {
++      get: {
++        ...oas7Paths,
++      },
++    },
 +  };
    return spec;
  }

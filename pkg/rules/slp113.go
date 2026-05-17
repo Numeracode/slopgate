@@ -107,8 +107,9 @@ func slp113ExpectedTestFile(dir, base, ext string) string {
 func (r SLP113) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	allFiles := make(map[string]bool)
+	files := d.AllFiles()
 
-	for _, f := range d.AllFiles() {
+	for _, f := range files {
 		if !f.IsDelete {
 			allFiles[filepath.ToSlash(f.Path)] = true
 		}

@@ -26,8 +26,9 @@ func (r SLP127) Check(d *diff.Diff) []Finding {
 	changedRuleFirstLine := map[string]int{}
 	changedRuleSnippet := map[string]string{}
 	changedTests := map[string]bool{}
+	files := d.AllFiles()
 
-	for _, f := range d.AllFiles() {
+	for _, f := range files {
 		if f.IsDelete {
 			continue
 		}

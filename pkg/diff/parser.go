@@ -36,7 +36,7 @@ const (
 // Diff is the top-level parsed representation of a unified diff.
 type Diff struct {
 	Files            []File
-	IgnoredFiles     []File // files filtered from Files by ignore patterns but retained for meta-rules
+	ignoredFiles     []File // files filtered from Files by ignore patterns but retained for meta-rules
 	RepoRoot         string // optional absolute worktree root for rules that inspect files
 	Staged           bool   // true when the diff came from git diff --cached
 	SnapshotRef      string // optional git snapshot source for the new side, e.g. HEAD or :
@@ -75,9 +75,9 @@ func (d *Diff) AllFiles() []File {
 	if d == nil {
 		return nil
 	}
-	out := make([]File, 0, len(d.Files)+len(d.IgnoredFiles))
+	out := make([]File, 0, len(d.Files)+len(d.ignoredFiles))
 	out = append(out, d.Files...)
-	out = append(out, d.IgnoredFiles...)
+	out = append(out, d.ignoredFiles...)
 	return out
 }
 

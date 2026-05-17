@@ -52,14 +52,14 @@ func isSourceLikeFile(path string) bool {
 }
 
 func normalizedSlashPath(path string) string {
-	if path == "" {
+	if len(path) == 0 {
 		return ""
 	}
 	return strings.ReplaceAll(strings.ToLower(path), "\\", "/")
 }
 
 func isGeneratedArtifactPath(path string) bool {
-	if path == "" {
+	if len(path) == 0 {
 		return false
 	}
 	lower := normalizedSlashPath(path)
@@ -67,7 +67,7 @@ func isGeneratedArtifactPath(path string) bool {
 }
 
 func isOpenAPIArtifactPath(path string) bool {
-	if path == "" {
+	if len(path) == 0 {
 		return false
 	}
 	lower := normalizedSlashPath(path)

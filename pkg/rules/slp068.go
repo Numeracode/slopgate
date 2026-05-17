@@ -56,8 +56,7 @@ func slp068CollapseCandidates(candidates []slp068Candidate) []slp068Candidate {
 		return candidates
 	}
 	// Merge overlapping duplicate windows so one repeated block yields one finding.
-	collapsed := make([]slp068Candidate, 1, len(candidates))
-	collapsed[0] = candidates[0]
+	collapsed := append(make([]slp068Candidate, 0, len(candidates)), candidates[:1]...)
 	for _, next := range candidates[1:] {
 		last := &collapsed[len(collapsed)-1]
 		if next.start <= last.end {
@@ -105,9 +104,15 @@ func (r SLP068) Check(d *diff.Diff) []Finding {
 			}
 			seen[key] = append(seen[key], i)
 		}
-		collapsed := slp068CollapseCandidates(candidates)
-		for _, match := range collapsed {
-			finding := Finding{RuleID: r.ID(), Severity: r.DefaultSeverity(), File: f.Path, Line: match.line, Message: "duplicate code block within the same file — extract to helper function", Snippet: strings.TrimSpace(added[match.start].Content)}
+		matches := slp068CollapseCandidates(candidates)
+		for _, match := range matches {
+			var finding Finding
+			finding.RuleID = r.ID()
+			finding.Severity = r.DefaultSeverity()
+			finding.File = f.Path
+			finding.Line = match.line
+			finding.Message = "duplicate code block within the same file — extract to helper function"
+			finding.Snippet = strings.TrimSpace(added[match.start].Content)
 			out = append(out, finding)
 		}
 	}

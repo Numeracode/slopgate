@@ -62,7 +62,7 @@ func slp113HasTestFile(sourcePath string, allFiles map[string]bool) bool {
 	dir := filepath.Dir(sourcePath)
 	base := strings.TrimSuffix(filepath.Base(sourcePath), ext)
 
-	testName := slp113TestPath(dir, base, testSuffix)
+	testName := filepath.ToSlash(slp113TestPath(dir, base, testSuffix))
 	if allFiles[testName] {
 		return true
 	}
@@ -107,10 +107,11 @@ func slp113ExpectedTestFile(dir, base, ext string) string {
 func (r SLP113) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	allFiles := make(map[string]bool)
+	files := d.AllFiles()
 
-	for _, f := range d.Files {
+	for _, f := range files {
 		if !f.IsDelete {
-			allFiles[f.Path] = true
+			allFiles[filepath.ToSlash(f.Path)] = true
 		}
 	}
 

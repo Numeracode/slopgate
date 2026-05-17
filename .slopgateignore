@@ -5,6 +5,9 @@
 # case for .slopgateignore.
 pkg/rules/slp*_test.go
 pkg/rules/slp_*_test.go
+pkg/rules/filetype_test.go
+pkg/diff/filter_test.go
+pkg/diff/parser_test.go
 
 # Self-scanning false positives: slopgate's own rule implementations
 # use patterns (context.WithTimeout cancel, regex submatch access)

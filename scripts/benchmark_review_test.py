@@ -325,6 +325,11 @@ class MatchStreamTest(unittest.TestCase):
 
 
 class BenchmarkTieringTest(unittest.TestCase):
+    def test_benchmark_rule_overrides_mark_known_noise_rules_as_advisory(self) -> None:
+        self.assertEqual(benchmark_review.RULE_BENCHMARK_MODE_OVERRIDES["SLP017"], "advisory")
+        self.assertEqual(benchmark_review.RULE_BENCHMARK_MODE_OVERRIDES["SLP035"], "advisory")
+        self.assertEqual(benchmark_review.RULE_BENCHMARK_MODE_OVERRIDES["SLP053"], "advisory")
+
     def test_finding_to_compare_item_marks_info_as_advisory_by_default(self) -> None:
         finding = {
             "file": "a.js",

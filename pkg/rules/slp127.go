@@ -26,8 +26,9 @@ func (r SLP127) Check(d *diff.Diff) []Finding {
 	changedRuleFirstLine := map[string]int{}
 	changedRuleSnippet := map[string]string{}
 	changedTests := map[string]bool{}
+	files := d.AllFiles()
 
-	for _, f := range d.Files {
+	for _, f := range files {
 		if f.IsDelete {
 			continue
 		}
@@ -38,9 +39,17 @@ func (r SLP127) Check(d *diff.Diff) []Finding {
 			changedTests[path] = true
 			continue
 		}
+	}
+
+	for _, f := range d.Files {
+		if f.IsDelete {
+			continue
+		}
+		path := filepath.ToSlash(f.Path)
 		if !slp127RuleImplPathRe.MatchString(path) || slp127RuleTestPathRe.MatchString(path) {
 			continue
 		}
+		added := f.AddedLines()
 		if len(added) == 0 {
 			continue
 		}

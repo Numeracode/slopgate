@@ -132,6 +132,20 @@ index 1111111..0000000
 	}
 }
 
+func TestDiffAllFilesIncludesIgnoredFiles(t *testing.T) {
+	d := &Diff{
+		Files:        []File{{Path: "pkg/rules/slp130.go"}},
+		ignoredFiles: []File{{Path: "pkg/rules/slp130_test.go"}},
+	}
+	got := d.AllFiles()
+	if len(got) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(got))
+	}
+	if got[0].Path != "pkg/rules/slp130.go" || got[1].Path != "pkg/rules/slp130_test.go" {
+		t.Fatalf("unexpected files from AllFiles: %+v", got)
+	}
+}
+
 func TestParse_MultipleFilesMultipleHunks(t *testing.T) {
 	input := `diff --git a/a.go b/a.go
 index aaa..bbb 100644

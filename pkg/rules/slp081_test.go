@@ -1,8 +1,6 @@
 package rules
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestSLP081(t *testing.T) {
 	tests := []struct {
@@ -11,7 +9,7 @@ func TestSLP081(t *testing.T) {
 		expected int
 	}{
 		{
-			name: "tsx without React import has JSX",
+			name: "tsx without React import but plain JSX is ok under automatic runtime",
 			diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
 index 123..456 100644
 --- a/src/components/Button.tsx
@@ -24,19 +22,48 @@ index 123..456 100644
  }
  export default Button
 `,
-			expected: 1,
+			expected: 0,
 		},
 		{
-			name: "tsx with React import is ok",
+			name: "jsx without React import but plain JSX is ok under automatic runtime",
+			diff: `diff --git a/src/App.jsx b/src/App.jsx
+index 123..456 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -1,5 +1,6 @@
+-const App = () => <div>Hello</div>
++const App = () => <div className="app">Hello</div>
+ export default App
+`,
+			expected: 0,
+		},
+		{
+			name: "tsx with React namespace usage and no import still fires",
 			diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
 index 123..456 100644
 --- a/src/components/Button.tsx
 +++ b/src/components/Button.tsx
 @@ -1,5 +1,8 @@
-+import React from 'react'
+-const Button = () => {
+-  return <>Click me</>
++const Button = () => {
++  return <React.Fragment>Click me</React.Fragment>
+ }
+ export default Button
+`,
+			expected: 1,
+		},
+		{
+			name: "tsx with React import in context is ok",
+			diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 123..456 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react'
  const Button = () => {
--  return <button>Click me</button>
-+  return <button className="btn">Click me</button>
+-  return <>Click me</>
++  return <React.Fragment>Click me</React.Fragment>
  }
  export default Button
 `,
@@ -54,19 +81,6 @@ index 123..456 100644
  export { add }
 `,
 			expected: 0,
-		},
-		{
-			name: "jsx file without React import",
-			diff: `diff --git a/src/App.jsx b/src/App.jsx
-index 123..456 100644
---- a/src/App.jsx
-+++ b/src/App.jsx
-@@ -1,5 +1,6 @@
--const App = () => <div>Hello</div>
-+const App = () => <div className="app">Hello</div>
- export default App
-`,
-			expected: 1,
 		},
 	}
 
@@ -86,17 +100,15 @@ index 123..456 100644
 	}
 }
 
-func TestSLP081_JSXPattern(t *testing.T) {
-	// Test JSX pattern detection
+func TestSLP081_ReactNamespacePattern(t *testing.T) {
 	tests := []struct {
 		line     string
 		expected bool
 	}{
-		{"const Button = () => <button>Click</button>", true},
-		{"export default function App() { return <div /> }", true},
-		{"export const Component = ({ children }) => <div>{children}</div>", true},
+		{"const Button = () => <button>Click</button>", false},
+		{"export default function App() { return <React.Fragment /> }", true},
+		{"const node = React.createElement('div')", true},
 		{"const x = 5", false},
-		{"const Button = () => { const [count, setCount] = useState(0); return <button>{count}</button> }", true},
 	}
 
 	for _, tt := range tests {
@@ -114,7 +126,7 @@ index 123..456 100644
 
 			hasFinding := len(findings) > 0
 			if hasFinding != tt.expected {
-				t.Errorf("line %q: expected JSX finding=%v, got %v", tt.line, tt.expected, hasFinding)
+				t.Errorf("line %q: expected React namespace finding=%v, got %v", tt.line, tt.expected, hasFinding)
 			}
 		})
 	}

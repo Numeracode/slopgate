@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/messagesgoel-blip/slopgate/pkg/diff"
@@ -159,5 +161,78 @@ func TestSLP033(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSLP033_ContextTypeOnlyImportAvoidsFalsePositive(t *testing.T) {
+	d := parseDiff(t, `diff --git a/app/src/components/docs/MDXProvider.tsx b/app/src/components/docs/MDXProvider.tsx
+--- a/app/src/components/docs/MDXProvider.tsx
++++ b/app/src/components/docs/MDXProvider.tsx
+@@ -1,3 +1,4 @@
+ import type { ReactNode } from 'react'
+ 
++type ProviderProps = { children: ReactNode }
+ export function MDXProvider({ children }: ProviderProps) {
+`)
+
+	got := SLP033{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for context type import, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP033_MultilineTypeImportAndAliasAvoidFalsePositive(t *testing.T) {
+	d := parseDiff(t, `diff --git a/app/src/components/docs/MDXProvider.tsx b/app/src/components/docs/MDXProvider.tsx
+--- a/app/src/components/docs/MDXProvider.tsx
++++ b/app/src/components/docs/MDXProvider.tsx
+@@ -1,5 +1,6 @@
+ import {
+   type ReactNode,
+   type ComponentType as MDXComponent,
+ } from 'react'
+ 
++type ProviderProps = { children: ReactNode; components?: MDXComponent<Record<string, unknown>> }
+`)
+
+	got := SLP033{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for multiline type import, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP033_FallsBackToSnapshotFileImportsOutsideHunk(t *testing.T) {
+	root := t.TempDir()
+	filePath := filepath.Join(root, "app/src/components/docs")
+	if err := os.MkdirAll(filePath, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	content := `import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+function Callout({ children }: { children?: ReactNode }) {
+  return <aside>{children}</aside>;
+}
+`
+	target := filepath.Join(filePath, "MDXProvider.tsx")
+	if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	d := parseDiffWithRoot(t, root, `diff --git a/app/src/components/docs/MDXProvider.tsx b/app/src/components/docs/MDXProvider.tsx
+--- a/app/src/components/docs/MDXProvider.tsx
++++ b/app/src/components/docs/MDXProvider.tsx
+@@ -4,2 +4,5 @@
+-function Callout({ children }: { children?: ReactNode }) {
+-  return <aside>{children}</aside>;
++function Callout({ children }: { children?: ReactNode }) {
++  const className = "callout";
++  return <aside className={className}>{children}</aside>;
++}
+`)
+
+	got := SLP033{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings with snapshot file imports, got %d: %+v", len(got), got)
 	}
 }

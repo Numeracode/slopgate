@@ -98,7 +98,12 @@ def get_stream_total(data: dict[str, Any], stream_name: str) -> int:
     total = stream.get("total")
     if isinstance(total, int):
         return total
-    legacy = data.get(legacy_map[stream_name], {})
+    legacy_key = legacy_map.get(stream_name)
+    if not legacy_key:
+        return 0
+    legacy = data.get(legacy_key, {})
+    if not isinstance(legacy, dict):
+        return 0
     return int(legacy.get("total", 0))
 
 
@@ -292,7 +297,7 @@ def _tier_metric_value(data: dict[str, Any], tier_name: str, key: str) -> Any:
     metrics = tier_metrics(data, tier_name)
     if metrics is None:
         return "-"
-    return metrics[key]
+    return metrics.get(key, "-")
 
 
 def main() -> int:

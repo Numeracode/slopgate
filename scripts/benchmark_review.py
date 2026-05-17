@@ -609,9 +609,13 @@ def collect_sentry_findings(
 
 def finding_to_compare_item(finding: dict[str, Any]) -> dict[str, Any]:
     severity = str(finding["severity"]).lower()
+    if severity not in BENCHMARK_MODE_BY_SEVERITY:
+        raise BenchmarkError(
+            f"unsupported benchmark severity for rule {finding['rule_id']}: {severity}"
+        )
     benchmark_mode = RULE_BENCHMARK_MODE_OVERRIDES.get(
         finding["rule_id"],
-        BENCHMARK_MODE_BY_SEVERITY.get(severity, "parity"),
+        BENCHMARK_MODE_BY_SEVERITY[severity],
     )
     return {
         "file": finding["file"],

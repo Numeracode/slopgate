@@ -355,6 +355,21 @@ class BenchmarkTieringTest(unittest.TestCase):
         self.assertEqual(item["benchmark_mode"], "parity")
         self.assertTrue(item["benchmark_eligible"])
 
+    def test_finding_to_compare_item_rejects_unknown_severity(self) -> None:
+        finding = {
+            "file": "a.js",
+            "line": 10,
+            "rule_id": "SLP404",
+            "severity": "criticalish",
+            "message": "unknown severity issue",
+        }
+
+        with self.assertRaisesRegex(
+            benchmark_review.BenchmarkError,
+            "SLP404: criticalish|SLP404.*criticalish",
+        ):
+            benchmark_review.finding_to_compare_item(finding)
+
     def test_build_result_payload_keeps_legacy_fields_and_adds_tiers(self) -> None:
         context = benchmark_review.WorktreeContext(
             repo_root=Path("repo-root"),

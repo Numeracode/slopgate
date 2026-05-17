@@ -8,10 +8,10 @@ import (
 	"github.com/messagesgoel-blip/slopgate/pkg/diff"
 )
 
-// SLP017 flags magic numbers — unexplained numeric literals in
-// computation contexts. AI agents frequently sprinkle raw literals
-// (tax rates, thresholds, timeouts) instead of defining named
-// constants, making code fragile and hard to review.
+// SLP017 flags magic numbers — unexplained numeric literals in public API,
+// configuration, or business-domain contexts. AI agents frequently sprinkle
+// raw literals (tax rates, thresholds, policy values) instead of defining
+// named constants, making code fragile and hard to review.
 //
 // Exempt: 0, 1, 2; hex/octal literals; array index patterns [N];
 // constant/define declarations; ALL_CAPS assignments; test files;
@@ -48,6 +48,16 @@ var slp017HTTPStatusContext = regexp.MustCompile(`(?i)\.status\s*\(|status\s*[=:
 // slp017LimitContext matches limit/batch/pagination context.
 // If line contains LIMIT, limit, pageSize, batch, etc., treat common limits as intentional.
 var slp017LimitContext = regexp.MustCompile(`(?i)LIMIT\s+\d|limit\s*[=:]\s*\d|pageSize|page_size|batchSize|batch_size|max.*=.*\d|take\s*\(\s*\d|top\s*\d|first\s*\d|\.limit\s*\(`)
+
+// slp017BusinessContext narrows SLP017 to literals that look like public API,
+// configuration, or business-domain values rather than incidental arithmetic.
+var slp017BusinessContext = regexp.MustCompile(`(?i)\b(?:rate|ratio|percent|percentage|threshold|quota|budget|score|weight|multiplier|factor|tax|fee|price|discount|sampling|sample|rollout|retention|version|policy|config|setting|limit|maximum|minimum|timeout|ttl|retry|interval|batch|pageSize|page_size|capacity|concurrency|port)\b`)
+
+var slp017BusinessPathContext = regexp.MustCompile(`(?i)(?:^|/)(?:config|configs|settings|constants|env|policy|policies)(?:/|[._-])|(?:^|/)[^/]*(?:config|settings|constants|policy)[^/]*\.(?:go|ts|tsx|js|jsx|py|java|rs)$`)
+
+var slp017CamelIdentifierBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+
+var slp017IdentifierSeparators = strings.NewReplacer("_", " ", "-", " ")
 
 // slp017MeasurementContext matches descriptive size/duration/validation fields.
 // These literals are usually schema bounds, UI geometry, or timing knobs already
@@ -163,6 +173,9 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 			isHTTPContext := slp017HTTPStatusContext.MatchString(clean)
 			// Check for limit/batch context — exempt common limits.
 			isLimitContext := slp017LimitContext.MatchString(clean)
+			// Keep SLP017 focused on public API/config/business values instead
+			// of local implementation arithmetic.
+			isBusinessContext := slp017HasBusinessContext(f.Path, clean)
 			// Mask measurement context tokens and their associated numbers
 			// so unrelated literals on the same line are still checked.
 			clean = slp017MaskMeasurementContexts(clean)
@@ -217,6 +230,9 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 				if isLimitContext && slp017CommonLimit.MatchString(num) {
 					continue
 				}
+				if !isBusinessContext {
+					continue
+				}
 				out = append(out, Finding{
 					RuleID:   r.ID(),
 					Severity: r.DefaultSeverity(),
@@ -230,6 +246,12 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 		}
 	}
 	return out
+}
+
+func slp017HasBusinessContext(filePath, content string) bool {
+	normalized := slp017CamelIdentifierBoundary.ReplaceAllString(content, "$1 $2")
+	normalized = slp017IdentifierSeparators.Replace(normalized)
+	return slp017BusinessContext.MatchString(normalized) || slp017BusinessPathContext.MatchString(filePath)
 }
 
 // findMatchingParen returns the index of the ')' that matches the '(' at openParenPos.

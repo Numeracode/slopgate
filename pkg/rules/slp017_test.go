@@ -12,7 +12,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 		want int
 	}{
 		{
-			name: "magic number flagged",
+			name: "local arithmetic not flagged",
 			diff: `diff --git a/main.go b/main.go
 --- a/main.go
 +++ b/main.go
@@ -21,7 +21,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 -	return 0
 +	return x * 7
  }`,
-			want: 1,
+			want: 0,
 		},
 		{
 			name: "0 not flagged",
@@ -154,7 +154,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 			want: 0,
 		},
 		{
-			name: "python magic number flagged",
+			name: "python local arithmetic not flagged",
 			diff: `diff --git a/main.py b/main.py
 --- a/main.py
 +++ b/main.py
@@ -163,7 +163,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 -    pass
 +    return x * 7
  }`,
-			want: 1,
+			want: 0,
 		},
 		{
 			name: "python define not flagged",
@@ -178,15 +178,25 @@ func TestSLP017_MagicNumber(t *testing.T) {
 			want: 0,
 		},
 		{
-			name: "float literal flagged",
-			diff: `diff --git a/main.go b/main.go
---- a/main.go
-+++ b/main.go
+			name: "business float literal flagged",
+			diff: `diff --git a/pricing.go b/pricing.go
+--- a/pricing.go
++++ b/pricing.go
 @@ -1,3 +1,4 @@
- func calc() float64 {
+ func calcFee() float64 {
 -	return 0.0
-+	return 3.14
++	return fee * 3.14
  }`,
+			want: 1,
+		},
+		{
+			name: "config path literal flagged",
+			diff: `diff --git a/config/pricing.ts b/config/pricing.ts
+--- a/config/pricing.ts
++++ b/config/pricing.ts
+@@ -1,2 +1,3 @@
++export const pricingBucket = 7
+`,
 			want: 1,
 		},
 		{

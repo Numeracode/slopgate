@@ -111,7 +111,7 @@ slopgate ships around 140 rules. `slopgate --list-rules` prints the authoritativ
 | Core diff checks | `SLP001`–`SLP070` | test quality, code hygiene, safety, API and data smells |
 | Go AST checks | `SLP071`–`SLP080` | Go semantic hazards — nil, SQL injection, races, ignored errors |
 | Extended checks | `SLP081`–`SLP152` | framework, API, auth, audit, pagination, concurrency, dead-code, and test-completeness patterns |
-| Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, swallowed promise failures, missing rollbacks |
+| Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP205`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order overrides, swallowed promise failures, missing rollbacks |
 
 Rules `SLP081` and `SLP033` handle React/TypeScript JSX import behavior for the modern automatic runtime. `SLP081` allows plain JSX without a `React` import, but still flags explicit `React.*` namespace usage unless the file imports `React` through a default or namespace binding. `SLP033` checks import availability using visible diff context and the file snapshot when the import sits outside the changed hunk.
 

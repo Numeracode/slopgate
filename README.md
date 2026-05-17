@@ -113,6 +113,8 @@ slopgate ships around 140 rules. `slopgate --list-rules` prints the authoritativ
 | Extended checks | `SLP081`–`SLP152` | framework, API, auth, audit, pagination, concurrency, dead-code, and test-completeness patterns |
 | Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, swallowed promise failures, missing rollbacks |
 
+React and TypeScript rules account for the modern automatic JSX runtime. `SLP081` allows plain JSX without a `React` import, but still flags explicit `React.*` namespace usage unless the file imports `React` through a default or namespace binding. `SLP033` checks import availability using visible diff context and the file snapshot when the import sits outside the changed hunk.
+
 ## Contributing
 
 To add a rule:

@@ -158,6 +158,29 @@ diff --git a/svc.test.ts b/svc.test.ts
 	}
 }
 
+func TestSLP151_FiresOnRemovedGenericMethod(t *testing.T) {
+	d := parseDiff(t, `diff --git a/store.ts b/store.ts
+--- a/store.ts
++++ b/store.ts
+@@ -1,5 +1,2 @@
+ class Store {
+-  override loadItems<T>(seed: T): T[] {
+-    return [seed];
+-  }
+ }
+diff --git a/store.test.ts b/store.test.ts
+--- a/store.test.ts
++++ b/store.test.ts
+@@ -1,1 +1,2 @@
+ const st = new Store();
++test("loadItems", () => { st.loadItems(0); });
+`)
+	got := SLP151{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding for a test calling a removed generic/override method")
+	}
+}
+
 func TestSLP151_NoFireOnControlFlowKeywords(t *testing.T) {
 	// A removed `for (...) {` must not register `for` as a definition.
 	d := parseDiff(t, `diff --git a/loop.ts b/loop.ts

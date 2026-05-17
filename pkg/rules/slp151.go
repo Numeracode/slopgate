@@ -28,7 +28,7 @@ var (
 	slp151JSDef       = regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)`)
 	slp151JSAssignDef = regexp.MustCompile(`^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)`)
 	slp151ClassDef    = regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)`)
-	slp151JSMethodDef = regexp.MustCompile(`^\s*(?:(?:public|private|protected|static|readonly|async|get|set)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{;]*)?\{`)
+	slp151JSMethodDef = regexp.MustCompile(`^\s*(?:(?:public|private|protected|static|readonly|override|abstract|declare|async|get|set)\s+)*(?:\*\s*)?([A-Za-z_$][\w$]*)\s*(?:<[^>{}]*>)?\s*\([^)]*\)\s*(?::[^{;]*)?\{`)
 	slp151PyDef       = regexp.MustCompile(`^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)`)
 	slp151PyClass     = regexp.MustCompile(`^\s*class\s+([A-Za-z_]\w*)`)
 	slp151Call        = regexp.MustCompile(`([A-Za-z_$][\w$]*)\s*\(`)

@@ -110,7 +110,7 @@ slopgate ships around 140 rules. `slopgate --list-rules` prints the authoritativ
 |---|---|---|
 | Core diff checks | `SLP001`–`SLP070` | test quality, code hygiene, safety, API and data smells |
 | Go AST checks | `SLP071`–`SLP080` | Go semantic hazards — nil, SQL injection, races, ignored errors |
-| Extended checks | `SLP081`–`SLP151` | framework, API, auth, audit, pagination, concurrency, and test-completeness patterns |
+| Extended checks | `SLP081`–`SLP152` | framework, API, auth, audit, pagination, concurrency, dead-code, and test-completeness patterns |
 | Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, swallowed promise failures, missing rollbacks |
 
 ## Contributing

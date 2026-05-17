@@ -39,12 +39,12 @@ Also: **broaden SLP010** (test no assertion: 9→~30 overlap) — detect test fu
 
 Patterns CR commonly flags that slopgate doesn't yet have.
 
-| Task ID | Rule | Pattern | Rationale |
-|---------|------|---------|-----------|
-| **SLO-151** | SLP151 | Orphaned test — test file references non-existent function/property in target module | High overlap potential, low implementation cost |
-| **SLO-152** | SLP152 | Dead code after partial return — detect dead branches within conditionals (SLP019 extension) | CR flags dead code heavily |
-| **SLO-153** | SLP153 | Test asserts wrong value — `expect(actual).toBe(wrong_expected)` (tricky, may need diff context) | CR semantic review strength |
-| **SLO-154** | SLP154 | Mock over-specification — mock returns fields real API doesn't provide | Prevents brittle tests |
+| Task ID | Rule | Pattern | Status |
+|---------|------|---------|--------|
+| **SLO-151** | SLP151 | Orphaned test — a test calls a function/method/class the same diff removed from source | ✅ Complete — diff-bounded; whole-codebase symbol resolution is out of scope per the non-goals |
+| **SLO-152** | SLP152 | Dead code after a fully-terminating if/else chain (SLP019 extension) | ✅ Complete — brace languages only |
+| **SLO-153** | SLP153 | Test asserts wrong value — `expect(actual).toBe(wrong_expected)` | ⛔ Re-scope — needs the *correct* value; not derivable from a diff. Leave to CR semantic review per the non-goals |
+| **SLO-154** | SLP154 | Mock over-specification — mock returns fields the real API doesn't | ⛔ Re-scope — needs the real API's type shape; not derivable from a diff alone |
 
 ---
 
@@ -113,8 +113,10 @@ These slopgate-only rules are its competitive advantage.
 | SLO-098-expand | P2 | Route w/o test (broadened) | ✅ Complete |
 | SLO-099-expand | P2 | Response field changed test | ✅ Complete |
 | SLO-100-broaden | P2 | Stub returns (broadened) | ✅ Complete |
-| SLO-151 | P3 | Orphaned test | 🚧 Not started |
-| SLO-152 | P3 | Dead code after partial return | 🚧 Not started |
+| SLO-151 | P3 | Orphaned test | ✅ Complete |
+| SLO-152 | P3 | Dead code after partial return | ✅ Complete |
+| SLO-153 | P3 | Test asserts wrong value | ⛔ Re-scope (not diff-derivable) |
+| SLO-154 | P3 | Mock over-specification | ⛔ Re-scope (not diff-derivable) |
 | SLO-017-tune | P4 | Magic number scope narrow | 🚧 Not started |
 | SLO-148-tune | P4 | Inconsistent naming scope narrow | 🚧 Not started |
 | SLO-035-narrow | P4 | General quality specificity | 🚧 Not started |

@@ -53,7 +53,7 @@ var slp017LimitContext = regexp.MustCompile(`(?i)LIMIT\s+\d|limit\s*[=:]\s*\d|pa
 // configuration, or business-domain values rather than incidental arithmetic.
 var slp017BusinessContext = regexp.MustCompile(`(?i)\b(?:rate|ratio|percent|percentage|threshold|quota|budget|score|weight|multiplier|factor|tax|fee|price|discount|sampling|sample|rollout|retention|version|policy|config|setting|limit|maximum|minimum|timeout|ttl|retry|interval|batch|pageSize|page_size|capacity|concurrency|port)\b`)
 
-var slp017BusinessPathContext = regexp.MustCompile(`(?i)(?:^|/)(?:config|configs|settings|constants|env|policy|policies)(?:/|[._-])|(?:^|/)[^/]*(?:config|settings|constants|policy)[^/]*\.(?:go|ts|tsx|js|jsx|py|java|rs)$`)
+var slp017BusinessPathContext = regexp.MustCompile(`(?i)(?:^|/)(?:config|configs|settings|constants|env|policy|policies)/|(?:^|/)[^/]*(?:config|settings|constants|policy)[^/]*\.(?:go|ts|tsx|js|jsx|py|java|rs)$`)
 
 var slp017CamelIdentifierBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 

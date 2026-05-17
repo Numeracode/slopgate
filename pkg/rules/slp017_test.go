@@ -335,3 +335,51 @@ func TestSLP017_IDAndDescription(t *testing.T) {
 		t.Errorf("Description() should mention constant: %q", r.Description())
 	}
 }
+
+func TestSLP017BusinessContext(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "camel case business identifier",
+			path:    "src/pricing.ts",
+			content: "const taxRate = 86.9",
+			want:    true,
+		},
+		{
+			name:    "snake case business identifier",
+			path:    "src/pricing.ts",
+			content: "const fee_rate = 3.14",
+			want:    true,
+		},
+		{
+			name:    "config directory path",
+			path:    "config/pricing.ts",
+			content: "export const value = 7",
+			want:    true,
+		},
+		{
+			name:    "config txt filename is not path context",
+			path:    "config.txt",
+			content: "value = 7",
+			want:    false,
+		},
+		{
+			name:    "plain local arithmetic",
+			path:    "src/main.go",
+			content: "return x * 7",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := slp017HasBusinessContext(tt.path, tt.content); got != tt.want {
+				t.Fatalf("slp017HasBusinessContext() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

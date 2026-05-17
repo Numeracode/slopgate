@@ -26,6 +26,17 @@ DEFAULT_SLOPGATE_BIN = os.environ.get("SLOPGATE_BIN", "/srv/storage/shared/tools
 DEFAULT_SENTRY_HELPER = os.environ.get("SLOPGATE_SENTRY_HELPER", "/srv/storage/shared/tools/bin/sentry-whimsy")
 DEFAULT_FUZZY_RANGE = int(os.environ.get("BENCHMARK_FUZZY_RANGE", "2"))
 GIT_HOOK_ENV_VARS = ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE", "GIT_PREFIX")
+BENCHMARK_MODE_BY_SEVERITY = {
+    "block": "parity",
+    "warn": "parity",
+    "info": "advisory",
+}
+RULE_BENCHMARK_MODE_OVERRIDES: dict[str, str] = {}
+BENCHMARK_TIER_DESCRIPTIONS = {
+    "all_rules": "Every Slopgate finding, preserving legacy benchmark behavior.",
+    "block_warn_only": "Only block and warn findings. Info findings are excluded.",
+    "benchmark_eligible": "Only findings whose benchmark mode resolves to parity.",
+}
 
 
 class BenchmarkError(RuntimeError):
@@ -597,12 +608,194 @@ def collect_sentry_findings(
 
 
 def finding_to_compare_item(finding: dict[str, Any]) -> dict[str, Any]:
+    severity = str(finding["severity"]).lower()
+    if severity not in BENCHMARK_MODE_BY_SEVERITY:
+        raise BenchmarkError(
+            f"unsupported benchmark severity for rule {finding['rule_id']}: {severity}"
+        )
+    benchmark_mode = RULE_BENCHMARK_MODE_OVERRIDES.get(
+        finding["rule_id"],
+        BENCHMARK_MODE_BY_SEVERITY[severity],
+    )
     return {
         "file": finding["file"],
         "line": int(finding["line"]),
         "rule_id": finding["rule_id"],
-        "severity": finding["severity"],
+        "severity": severity,
         "message": finding["message"],
+        "benchmark_mode": benchmark_mode,
+        "benchmark_eligible": benchmark_mode == "parity",
+    }
+
+
+def summarize_slopgate_findings(sg_findings: list[dict[str, Any]]) -> dict[str, int]:
+    summary = {"total": len(sg_findings), "block": 0, "warn": 0, "info": 0}
+    for finding in sg_findings:
+        severity = str(finding.get("severity", "")).lower()
+        if severity == "block":
+            summary["block"] += 1
+        elif severity == "warn":
+            summary["warn"] += 1
+        else:
+            summary["info"] += 1
+    return summary
+
+
+def build_score_summary(
+    all_result: dict[str, Any],
+    actionable_result: dict[str, Any],
+    combined_result: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "overlap_all": all_result["comparison"]["overlap"],
+        "overlap_actionable": actionable_result["comparison"]["overlap"],
+        "overlap_actionable_plus_sentry": combined_result["comparison"]["overlap"],
+        "coverage_all_pct": all_result["coverage_pct"],
+        "coverage_actionable_pct": actionable_result["coverage_pct"],
+        "coverage_actionable_plus_sentry_pct": combined_result["coverage_pct"],
+        "precision_proxy_all_pct": all_result["precision_proxy_pct"],
+        "precision_proxy_actionable_pct": actionable_result["precision_proxy_pct"],
+        "precision_proxy_actionable_plus_sentry_pct": combined_result["precision_proxy_pct"],
+    }
+
+
+def build_tier_result(
+    sg_findings: list[dict[str, Any]],
+    all_comments: list[ReviewFinding],
+    actionable_comments: list[ReviewFinding],
+    sentry_findings: list[ReviewFinding],
+    combined_actionable: list[ReviewFinding],
+    fuzzy_range: int,
+) -> dict[str, Any]:
+    all_result = match_stream(sg_findings, all_comments, fuzzy_range)
+    actionable_result = match_stream(sg_findings, actionable_comments, fuzzy_range)
+    sentry_result = match_stream(sg_findings, sentry_findings, fuzzy_range)
+    combined_result = match_stream(sg_findings, combined_actionable, fuzzy_range)
+    return {
+        "slopgate": summarize_slopgate_findings(sg_findings),
+        "comparison": all_result["comparison"],
+        "scores": build_score_summary(all_result, actionable_result, combined_result),
+        "streams": {
+            "coderabbit_all": {"total": len(all_comments)},
+            "coderabbit_actionable": {"total": len(actionable_comments)},
+            "sentry": {"total": len(sentry_findings)},
+            "actionable_plus_sentry": {"total": len(combined_actionable)},
+        },
+        "comparison_streams": {
+            "coderabbit_all": all_result,
+            "coderabbit_actionable": actionable_result,
+            "sentry": sentry_result,
+            "actionable_plus_sentry": combined_result,
+        },
+        "overlap_details": all_result["overlap_details"],
+        "cr_only_details": all_result["review_only_details"],
+        "sg_only_details": all_result["sg_only_details"],
+        "actionable_overlap_details": actionable_result["overlap_details"],
+        "cr_actionable_only_details": actionable_result["review_only_details"],
+        "sentry_only_details": sentry_result["review_only_details"],
+        "actionable_plus_sentry_only_details": combined_result["review_only_details"],
+    }
+
+
+def build_benchmark_tiers(
+    sg_findings: list[dict[str, Any]],
+    all_comments: list[ReviewFinding],
+    actionable_comments: list[ReviewFinding],
+    sentry_findings: list[ReviewFinding],
+    combined_actionable: list[ReviewFinding],
+    fuzzy_range: int,
+) -> dict[str, dict[str, Any]]:
+    block_warn_only = [f for f in sg_findings if f["severity"] in {"block", "warn"}]
+    benchmark_eligible = [f for f in sg_findings if f["benchmark_eligible"]]
+    return {
+        "all_rules": build_tier_result(
+            sg_findings,
+            all_comments,
+            actionable_comments,
+            sentry_findings,
+            combined_actionable,
+            fuzzy_range,
+        ),
+        "block_warn_only": build_tier_result(
+            block_warn_only,
+            all_comments,
+            actionable_comments,
+            sentry_findings,
+            combined_actionable,
+            fuzzy_range,
+        ),
+        "benchmark_eligible": build_tier_result(
+            benchmark_eligible,
+            all_comments,
+            actionable_comments,
+            sentry_findings,
+            combined_actionable,
+            fuzzy_range,
+        ),
+    }
+
+
+def build_benchmark_metadata() -> dict[str, Any]:
+    return {
+        "default_mode_by_severity": BENCHMARK_MODE_BY_SEVERITY,
+        "rule_mode_overrides": RULE_BENCHMARK_MODE_OVERRIDES,
+        "tier_descriptions": BENCHMARK_TIER_DESCRIPTIONS,
+    }
+
+
+def build_result_payload(
+    *,
+    slug: str,
+    pr_number: int,
+    context: WorktreeContext,
+    pr_meta: dict[str, Any],
+    report: dict[str, Any],
+    all_comments: list[ReviewFinding],
+    actionable_comments: list[ReviewFinding],
+    sentry_findings: list[ReviewFinding],
+    combined_actionable: list[ReviewFinding],
+    fuzzy_range: int,
+    slopgate_stderr: str,
+) -> dict[str, Any]:
+    sg_findings = [finding_to_compare_item(finding) for finding in report.get("findings", [])]
+    benchmark_tiers = build_benchmark_tiers(
+        sg_findings,
+        all_comments,
+        actionable_comments,
+        sentry_findings,
+        combined_actionable,
+        fuzzy_range,
+    )
+    legacy_tier = benchmark_tiers["all_rules"]
+    return {
+        "repo": slug,
+        "pr": pr_number,
+        "base": context.compare_base,
+        "requested_base": context.requested_base,
+        "base_branch": context.base_branch,
+        "merged": bool(pr_meta.get("merged")),
+        "state": pr_meta.get("state", "unknown"),
+        "benchmark_mode": context.mode,
+        "checkout_ref": context.target_ref,
+        "slopgate": report.get("summary") or legacy_tier["slopgate"],
+        "coderabbit": {"total": len(all_comments)},
+        "coderabbit_actionable": {"total": len(actionable_comments)},
+        "sentry": {"total": len(sentry_findings)},
+        "actionable_plus_sentry": {"total": len(combined_actionable)},
+        "comparison": legacy_tier["comparison"],
+        "scores": legacy_tier["scores"],
+        "streams": legacy_tier["streams"],
+        "comparison_streams": legacy_tier["comparison_streams"],
+        "overlap_details": legacy_tier["overlap_details"],
+        "cr_only_details": legacy_tier["cr_only_details"],
+        "sg_only_details": legacy_tier["sg_only_details"],
+        "actionable_overlap_details": legacy_tier["actionable_overlap_details"],
+        "cr_actionable_only_details": legacy_tier["cr_actionable_only_details"],
+        "sentry_only_details": legacy_tier["sentry_only_details"],
+        "actionable_plus_sentry_only_details": legacy_tier["actionable_plus_sentry_only_details"],
+        "benchmark_metadata": build_benchmark_metadata(),
+        "benchmark_tiers": benchmark_tiers,
+        "slopgate_stderr": slopgate_stderr,
     }
 
 
@@ -730,7 +923,6 @@ def main() -> int:
     context = prepare_worktree(root, pr_meta, args.pr_number, requested_base)
     try:
         report, slopgate_stderr = run_slopgate(slug, context)
-        sg_findings = [finding_to_compare_item(finding) for finding in report.get("findings", [])]
         all_comments = collect_coderabbit_all(slug, args.pr_number)
         actionable_comments = collect_coderabbit_actionable(slug, args.pr_number)
         sentry_findings = collect_sentry_findings(
@@ -749,69 +941,32 @@ def main() -> int:
                 sentry_by_location[key] = item
         sentry_findings = list(sentry_by_location.values())
         combined_actionable = combine_streams_by_location(actionable_comments + sentry_findings)
-
-        all_result = match_stream(sg_findings, all_comments, args.fuzzy_range)
-        actionable_result = match_stream(sg_findings, actionable_comments, args.fuzzy_range)
-        sentry_result = match_stream(sg_findings, sentry_findings, args.fuzzy_range)
-        combined_result = match_stream(sg_findings, combined_actionable, args.fuzzy_range)
-
-        result = {
-            "repo": slug,
-            "pr": args.pr_number,
-            "base": context.compare_base,
-            "requested_base": context.requested_base,
-            "base_branch": context.base_branch,
-            "merged": bool(pr_meta.get("merged")),
-            "state": pr_meta.get("state", "unknown"),
-            "benchmark_mode": context.mode,
-            "checkout_ref": context.target_ref,
-            "slopgate": report.get("summary", {}),
-            "coderabbit": {"total": len(all_comments)},
-            "coderabbit_actionable": {"total": len(actionable_comments)},
-            "sentry": {"total": len(sentry_findings)},
-            "actionable_plus_sentry": {"total": len(combined_actionable)},
-            "comparison": all_result["comparison"],
-            "scores": {
-                "overlap_all": all_result["comparison"]["overlap"],
-                "overlap_actionable": actionable_result["comparison"]["overlap"],
-                "overlap_actionable_plus_sentry": combined_result["comparison"]["overlap"],
-                "coverage_all_pct": all_result["coverage_pct"],
-                "coverage_actionable_pct": actionable_result["coverage_pct"],
-                "coverage_actionable_plus_sentry_pct": combined_result["coverage_pct"],
-                "precision_proxy_all_pct": all_result["precision_proxy_pct"],
-                "precision_proxy_actionable_pct": actionable_result["precision_proxy_pct"],
-                "precision_proxy_actionable_plus_sentry_pct": combined_result["precision_proxy_pct"],
-            },
-            "streams": {
-                "coderabbit_all": {"total": len(all_comments)},
-                "coderabbit_actionable": {"total": len(actionable_comments)},
-                "sentry": {"total": len(sentry_findings)},
-                "actionable_plus_sentry": {"total": len(combined_actionable)},
-            },
-            "comparison_streams": {
-                "coderabbit_all": all_result,
-                "coderabbit_actionable": actionable_result,
-                "sentry": sentry_result,
-                "actionable_plus_sentry": combined_result,
-            },
-            "overlap_details": all_result["overlap_details"],
-            "cr_only_details": all_result["review_only_details"],
-            "sg_only_details": all_result["sg_only_details"],
-            "actionable_overlap_details": actionable_result["overlap_details"],
-            "cr_actionable_only_details": actionable_result["review_only_details"],
-            "sentry_only_details": sentry_result["review_only_details"],
-            "actionable_plus_sentry_only_details": combined_result["review_only_details"],
-            "slopgate_stderr": slopgate_stderr,
-        }
+        result = build_result_payload(
+            slug=slug,
+            pr_number=args.pr_number,
+            context=context,
+            pr_meta=pr_meta,
+            report=report,
+            all_comments=all_comments,
+            actionable_comments=actionable_comments,
+            sentry_findings=sentry_findings,
+            combined_actionable=combined_actionable,
+            fuzzy_range=args.fuzzy_range,
+            slopgate_stderr=slopgate_stderr,
+        )
     finally:
         context.cleanup()
 
-    print(
-        f"Scores: overlap_all={result['scores']['overlap_all']} "
-        f"overlap_actionable={result['scores']['overlap_actionable']} "
-        f"overlap_actionable_plus_sentry={result['scores']['overlap_actionable_plus_sentry']}",
-        file=sys.stderr,
-    )
+    for tier_name in ("all_rules", "block_warn_only", "benchmark_eligible"):
+        tier_scores = result["benchmark_tiers"][tier_name]["scores"]
+        print(
+            f"Scores[{tier_name}]: overlap_all={tier_scores['overlap_all']} "
+            f"overlap_actionable={tier_scores['overlap_actionable']} "
+            f"overlap_actionable_plus_sentry={tier_scores['overlap_actionable_plus_sentry']} "
+            f"coverage_all_pct={tier_scores['coverage_all_pct']:.1f} "
+            f"precision_proxy_all_pct={tier_scores['precision_proxy_all_pct']:.1f}",
+            file=sys.stderr,
+        )
 
     default_output_path = Path(tempfile.gettempdir()) / f"benchmark-{slug.replace('/', '-')}-{args.pr_number}.json"
     output_path = args.output or str(default_output_path)

@@ -324,5 +324,121 @@ class MatchStreamTest(unittest.TestCase):
         self.assertEqual(result["comparison"]["review_only"], 1)
 
 
+class BenchmarkTieringTest(unittest.TestCase):
+    def test_finding_to_compare_item_marks_info_as_advisory_by_default(self) -> None:
+        finding = {
+            "file": "a.js",
+            "line": 10,
+            "rule_id": "SLP035",
+            "severity": "Info",
+            "message": "style issue",
+        }
+
+        item = benchmark_review.finding_to_compare_item(finding)
+
+        self.assertEqual(item["severity"], "info")
+        self.assertEqual(item["benchmark_mode"], "advisory")
+        self.assertFalse(item["benchmark_eligible"])
+
+    def test_finding_to_compare_item_honors_rule_mode_override(self) -> None:
+        finding = {
+            "file": "a.js",
+            "line": 10,
+            "rule_id": "SLP999",
+            "severity": "info",
+            "message": "override issue",
+        }
+
+        with patch.dict(benchmark_review.RULE_BENCHMARK_MODE_OVERRIDES, {"SLP999": "parity"}, clear=True):
+            item = benchmark_review.finding_to_compare_item(finding)
+
+        self.assertEqual(item["benchmark_mode"], "parity")
+        self.assertTrue(item["benchmark_eligible"])
+
+    def test_finding_to_compare_item_rejects_unknown_severity(self) -> None:
+        finding = {
+            "file": "a.js",
+            "line": 10,
+            "rule_id": "SLP404",
+            "severity": "criticalish",
+            "message": "unknown severity issue",
+        }
+
+        with self.assertRaisesRegex(
+            benchmark_review.BenchmarkError,
+            "SLP404: criticalish|SLP404.*criticalish",
+        ):
+            benchmark_review.finding_to_compare_item(finding)
+
+    def test_build_result_payload_keeps_legacy_fields_and_adds_tiers(self) -> None:
+        context = benchmark_review.WorktreeContext(
+            repo_root=Path("repo-root"),
+            worktree_path=Path("worktree-path"),
+            target_ref="target-ref",
+            compare_base="base-sha",
+            requested_base="main",
+            base_branch="main",
+            mode="open_pr_head",
+        )
+        report = {
+            "summary": {"total": 2, "block": 0, "warn": 1, "info": 1},
+            "findings": [
+                {
+                    "file": "a.js",
+                    "line": 10,
+                    "rule_id": "SLP001",
+                    "severity": "warn",
+                    "message": "warn finding",
+                },
+                {
+                    "file": "b.js",
+                    "line": 20,
+                    "rule_id": "SLP035",
+                    "severity": "info",
+                    "message": "info finding",
+                },
+            ],
+        }
+        all_comments = [
+            benchmark_review.ReviewFinding(
+                path="a.js",
+                line=10,
+                body="matched review comment",
+                item_id="1",
+                source="coderabbit_all",
+                meta={},
+            )
+        ]
+
+        result = benchmark_review.build_result_payload(
+            slug="messagesgoel-blip/slopgate",
+            pr_number=64,
+            context=context,
+            pr_meta={"merged": False, "state": "open"},
+            report=report,
+            all_comments=all_comments,
+            actionable_comments=all_comments,
+            sentry_findings=[],
+            combined_actionable=all_comments,
+            fuzzy_range=0,
+            slopgate_stderr="benchmark stderr",
+        )
+
+        self.assertEqual(result["slopgate"], report["summary"])
+        self.assertEqual(result["comparison"], result["benchmark_tiers"]["all_rules"]["comparison"])
+        self.assertEqual(result["scores"], result["benchmark_tiers"]["all_rules"]["scores"])
+        self.assertEqual(result["sg_only_details"], result["benchmark_tiers"]["all_rules"]["sg_only_details"])
+        self.assertEqual(
+            result["benchmark_metadata"]["default_mode_by_severity"],
+            benchmark_review.BENCHMARK_MODE_BY_SEVERITY,
+        )
+        self.assertEqual(set(result["benchmark_tiers"]), {"all_rules", "block_warn_only", "benchmark_eligible"})
+        self.assertEqual(result["benchmark_tiers"]["all_rules"]["slopgate"]["total"], 2)
+        self.assertEqual(result["benchmark_tiers"]["block_warn_only"]["slopgate"]["total"], 1)
+        self.assertEqual(result["benchmark_tiers"]["benchmark_eligible"]["slopgate"]["total"], 1)
+        self.assertEqual(result["benchmark_tiers"]["all_rules"]["scores"]["overlap_all"], 1)
+        self.assertEqual(result["benchmark_tiers"]["benchmark_eligible"]["scores"]["overlap_all"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

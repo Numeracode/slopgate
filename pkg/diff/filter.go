@@ -20,6 +20,7 @@ func FilterIgnored(d *Diff, patterns []string) *Diff {
 	}
 	out := &Diff{
 		Files:            make([]File, 0, len(d.Files)),
+		IgnoredFiles:     append([]File(nil), d.IgnoredFiles...),
 		RepoRoot:         d.RepoRoot,
 		Staged:           d.Staged,
 		SnapshotRef:      d.SnapshotRef,
@@ -27,6 +28,7 @@ func FilterIgnored(d *Diff, patterns []string) *Diff {
 	}
 	for _, f := range d.Files {
 		if matchesAny(f.Path, patterns) {
+			out.IgnoredFiles = append(out.IgnoredFiles, f)
 			continue
 		}
 		out.Files = append(out.Files, f)

@@ -32,6 +32,9 @@ func TestFilterIgnored_GlobMatch(t *testing.T) {
 	if len(paths) != 2 || paths[0] != "pkg/rules/slp013.go" || paths[1] != "pkg/diff/parser.go" {
 		t.Errorf("unexpected paths: %v", paths)
 	}
+	if len(out.IgnoredFiles) != 1 || out.IgnoredFiles[0].Path != "pkg/rules/slp012_test.go" {
+		t.Errorf("unexpected ignored files: %+v", out.IgnoredFiles)
+	}
 }
 
 func TestFilterIgnored_DoubleStarMatchesAnyDir(t *testing.T) {

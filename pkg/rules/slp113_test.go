@@ -1,6 +1,10 @@
 package rules
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/messagesgoel-blip/slopgate/pkg/diff"
+)
 
 func TestSLP113_FiresOnGoSourceWithoutTest(t *testing.T) {
 	d := parseDiff(t, `diff --git a/handler.go b/handler.go
@@ -39,6 +43,25 @@ new file mode 100644
 	got := SLP113{}.Check(d)
 	if len(got) != 0 {
 		t.Fatalf("expected 0 findings when test present, got %d", len(got))
+	}
+}
+
+func TestSLP113_NoFireWhenMatchingTestIsIgnoredFromScan(t *testing.T) {
+	d := parseDiff(t, `diff --git a/pkg/rules/slp130.go b/pkg/rules/slp130.go
+--- a/pkg/rules/slp130.go
++++ b/pkg/rules/slp130.go
+@@ -1,1 +1,3 @@
++func (SLP130) Description() string { return "updated" }
+diff --git a/pkg/rules/slp130_test.go b/pkg/rules/slp130_test.go
+--- a/pkg/rules/slp130_test.go
++++ b/pkg/rules/slp130_test.go
+@@ -1,1 +1,3 @@
++func TestSLP130_Updated(t *testing.T) {}
+`)
+	filtered := diff.FilterIgnored(d, []string{"pkg/rules/slp*_test.go"})
+	got := SLP113{}.Check(filtered)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings when ignored test file still exists in diff metadata, got %d", len(got))
 	}
 }
 

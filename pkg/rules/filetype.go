@@ -52,15 +52,24 @@ func isSourceLikeFile(path string) bool {
 }
 
 func normalizedSlashPath(path string) string {
+	if path == "" {
+		return ""
+	}
 	return strings.ReplaceAll(strings.ToLower(path), "\\", "/")
 }
 
 func isGeneratedArtifactPath(path string) bool {
+	if path == "" {
+		return false
+	}
 	lower := normalizedSlashPath(path)
 	return strings.Contains(lower, "/generated/")
 }
 
 func isOpenAPIArtifactPath(path string) bool {
+	if path == "" {
+		return false
+	}
 	lower := normalizedSlashPath(path)
 	base := filepath.Base(lower)
 	if strings.HasSuffix(base, ".openapi.json") || strings.HasSuffix(base, ".openapi.yaml") || strings.HasSuffix(base, ".openapi.yml") {

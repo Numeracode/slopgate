@@ -100,6 +100,7 @@ func slp056MatchesPrivateKey(content string) bool {
 	return true
 }
 
+// Check scans added lines for hardcoded secrets while skipping generated OpenAPI artifacts.
 func (r SLP056) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	for _, f := range d.Files {

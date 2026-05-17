@@ -36,6 +36,7 @@ const (
 // Diff is the top-level parsed representation of a unified diff.
 type Diff struct {
 	Files            []File
+	IgnoredFiles     []File // files filtered from Files by ignore patterns but retained for meta-rules
 	RepoRoot         string // optional absolute worktree root for rules that inspect files
 	Staged           bool   // true when the diff came from git diff --cached
 	SnapshotRef      string // optional git snapshot source for the new side, e.g. HEAD or :
@@ -66,6 +67,18 @@ type Line struct {
 	Content   string // text of the line, without the leading +/- space
 	NewLineNo int    // line number in the new file (0 for Delete)
 	OldLineNo int    // line number in the old file (0 for Add)
+}
+
+// AllFiles returns both active and ignored files so meta-rules can reason about
+// companion test changes without re-exposing ignored files to normal scanners.
+func (d *Diff) AllFiles() []File {
+	if d == nil {
+		return nil
+	}
+	out := make([]File, 0, len(d.Files)+len(d.IgnoredFiles))
+	out = append(out, d.Files...)
+	out = append(out, d.IgnoredFiles...)
+	return out
 }
 
 // AddedLines returns just the added lines across all hunks of a file, in order.

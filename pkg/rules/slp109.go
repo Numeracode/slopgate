@@ -206,9 +206,12 @@ func (r SLP109) Check(d *diff.Diff) []Finding {
 				if ln.Kind == diff.LineAdd && ln.NewLineNo != cur.sigLine {
 					if ln.NewLineNo == cur.bodyStartLine {
 						// For multi-line signatures: capture content after the opening '{' on the body-start line.
+						// braceOff is an offset into the raw line, so the
+						// slice must use ln.Content, not the trimmed copy —
+						// indexing the shorter trimmed string panics.
 						bracePos := cur.braceOff
 						if bracePos >= 0 && bracePos < len(ln.Content) {
-							inner := strings.TrimSpace(content[bracePos+1:])
+							inner := strings.TrimSpace(ln.Content[bracePos+1:])
 							inner = strings.TrimRight(inner, "} 	")
 							if inner != "" {
 								cur.body = append(cur.body, inner)

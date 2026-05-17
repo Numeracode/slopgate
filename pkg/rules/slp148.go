@@ -18,19 +18,28 @@ import (
 //  3. Group by semantic similarity (Levenshtein distance, shared prefixes/suffixes)
 //  4. Flag groups with multiple naming conventions
 //
-// Languages: JavaScript, TypeScript, Go, Python, Java
+// Languages: JavaScript, TypeScript, Go, Python
 //
-// Scope: across all files in the diff
+// Scope: exported / module-boundary declarations across files. A
+// naming inconsistency in a public symbol crosses module lines and is
+// worth flagging; a local variable's casing is noise.
 type SLP148 struct{}
 
 func (SLP148) ID() string                { return "SLP148" }
 func (SLP148) DefaultSeverity() Severity { return SeverityWarn }
 func (SLP148) Description() string {
-	return "inconsistent naming for the same conceptual variable across modules"
+	return "inconsistent naming for the same exported symbol across modules"
 }
 
-// identifierPattern matches any identifier after a keyword.
-var identifierPattern = regexp.MustCompile(`\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b`)
+// These patterns capture the declared name of an exported symbol per
+// language: JS/TS `export`, Go capitalised declarations, Python
+// module-level public defs/classes.
+var (
+	slp148JSExport = regexp.MustCompile(`^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type|enum)\s+([A-Za-z_$][\w$]*)`)
+	slp148GoFunc   = regexp.MustCompile(`^\s*func\s+(?:\([^)]*\)\s*)?([A-Z]\w*)\s*[(\[]`)
+	slp148GoType   = regexp.MustCompile(`^\s*(?:type|var|const)\s+([A-Z]\w*)\b`)
+	slp148PyDef    = regexp.MustCompile(`^(?:async\s+)?(?:def|class)\s+([A-Za-z]\w*)`)
+)
 
 // ignoreList contains common generic names that shouldn't be checked.
 var ignoreList = map[string]bool{
@@ -175,22 +184,38 @@ func stripStringsAndComments(line string) string {
 	return result.String()
 }
 
-// extractIdentifiers extracts variable/function names from added lines,
-// stripping string literals and comments first to avoid false matches.
-func extractIdentifiers(content string) []string {
+// slp148ExportedDecls returns the names of exported / module-boundary
+// symbols declared on a line, using the declaration syntax of the
+// file's language. Strings and comments are stripped first.
+func slp148ExportedDecls(content, filePath string) []string {
 	cleaned := stripStringsAndComments(content)
-	var ids []string
-	for _, match := range identifierPattern.FindAllStringSubmatch(cleaned, -1) {
-		if len(match) > 1 {
-			name := match[1]
-			// Skip keywords and very short names
-			if len(name) < 2 || ignoreList[strings.ToLower(name)] {
-				continue
+	var names []string
+	switch {
+	case isJSOrTSFile(filePath):
+		if m := slp148JSExport.FindStringSubmatch(cleaned); len(m) > 1 {
+			names = append(names, m[1])
+		}
+	case isGoFile(filePath):
+		for _, re := range []*regexp.Regexp{slp148GoFunc, slp148GoType} {
+			if m := re.FindStringSubmatch(cleaned); len(m) > 1 {
+				names = append(names, m[1])
 			}
-			ids = append(ids, name)
+		}
+	case isPythonFile(filePath):
+		// Module-level only (unindented) and public (no leading _).
+		if len(content) > 0 && content[0] != ' ' && content[0] != '\t' {
+			if m := slp148PyDef.FindStringSubmatch(cleaned); len(m) > 1 && !strings.HasPrefix(m[1], "_") {
+				names = append(names, m[1])
+			}
 		}
 	}
-	return ids
+	var out []string
+	for _, name := range names {
+		if len(name) >= 2 && !ignoreList[strings.ToLower(name)] {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func (r SLP148) Check(d *diff.Diff) []Finding {
@@ -219,8 +244,8 @@ func (r SLP148) Check(d *diff.Diff) []Finding {
 					continue
 				}
 				line := ln.Content
-				// Extract identifiers
-				ids := extractIdentifiers(line)
+				// Only exported / module-boundary declarations.
+				ids := slp148ExportedDecls(line, f.Path)
 				for _, id := range ids {
 					norm := normalizeName(id)
 					// Only consider normalized forms that aren't empty

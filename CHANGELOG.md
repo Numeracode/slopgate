@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.20 (unreleased)
+
+- **SLP151**: orphaned test — flags a test that calls a function, method, or class which the same diff removed from a non-test source file.
+
 ## v0.0.19 (unreleased)
 
 6 new rules for enhanced bug detection:

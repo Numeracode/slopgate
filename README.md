@@ -104,13 +104,13 @@ With shallow clones, fetch full history (`fetch-depth: 0`) so the base ref resol
 
 ## Rules
 
-slopgate ships around 150 rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
+slopgate ships around 140 rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
 
 | Family | IDs | Focus |
 |---|---|---|
 | Core diff checks | `SLP001`–`SLP070` | test quality, code hygiene, safety, API and data smells |
 | Go AST checks | `SLP071`–`SLP080` | Go semantic hazards — nil, SQL injection, races, ignored errors |
-| Extended checks | `SLP081`–`SLP148` | framework, API, auth, audit, pagination, and concurrency patterns |
+| Extended checks | `SLP081`–`SLP151` | framework, API, auth, audit, pagination, concurrency, and test-completeness patterns |
 | Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, swallowed promise failures, missing rollbacks |
 
 ## Contributing

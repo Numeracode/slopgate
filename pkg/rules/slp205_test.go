@@ -94,6 +94,30 @@ function buildSpec(spec) {
 			want: 0,
 		},
 		{
+			name: "does not flag same line nested path object spread",
+			diff: `diff --git a/api/src/lib/openapi.js b/api/src/lib/openapi.js
+--- a/api/src/lib/openapi.js
++++ b/api/src/lib/openapi.js
+@@ -10,3 +10,4 @@
+ function buildSpec(spec) {
++  spec.paths = { ...(spec.paths || {}), '/api/search': { get: { ...oas7Paths } } };
+ }
+`,
+			want: 0,
+		},
+		{
+			name: "does not flag commented assignment",
+			diff: `diff --git a/api/src/lib/openapi.js b/api/src/lib/openapi.js
+--- a/api/src/lib/openapi.js
++++ b/api/src/lib/openapi.js
+@@ -10,3 +10,4 @@
+ function buildSpec(spec) {
++  // spec.paths = { ...(spec.paths || {}), ...oas7Paths };
+ }
+`,
+			want: 0,
+		},
+		{
 			name: "does not flag unrelated schema merge",
 			diff: `diff --git a/api/src/lib/openapi.js b/api/src/lib/openapi.js
 --- a/api/src/lib/openapi.js

@@ -35,13 +35,14 @@ type slp205Line struct {
 	kind      diff.LineKind
 	newLineNo int
 	order     int
+	depthBase int
 }
 
 type slp205Event struct {
-	kind   string
-	line   slp205Line
-	pos    int
-	indent int
+	kind  string
+	line  slp205Line
+	pos   int
+	depth int
 }
 
 // Check scans JS/TS OpenAPI assembly diffs for unsafe path map spread order.
@@ -61,7 +62,9 @@ func (r SLP205) Check(d *diff.Diff) []Finding {
 		for _, h := range f.Hunks {
 			for i := range h.Lines {
 				ln := h.Lines[i]
-				if ln.Kind == diff.LineDelete || !slp205SpecPathsAssign.MatchString(ln.Content) {
+				if ln.Kind == diff.LineDelete ||
+					slp205CommentOnlyLinePrefix.MatchString(ln.Content) ||
+					!slp205SpecPathsAssign.MatchString(ln.Content) {
 					continue
 				}
 
@@ -99,15 +102,18 @@ func slp205CollectObjectBlock(lines []diff.Line, start int) []slp205Line {
 			continue
 		}
 		content := ln.Content
+		lineDepthBase := depth
+		lineDelta := 0
 		if !started {
 			open := strings.Index(content, "{")
 			if open < 0 {
 				continue
 			}
 			started = true
-			depth += slp205BraceDelta(content[open:])
+			lineDepthBase = 0
+			lineDelta = slp205BraceDelta(content[open:])
 		} else {
-			depth += slp205BraceDelta(content)
+			lineDelta = slp205BraceDelta(content)
 		}
 
 		out = append(out, slp205Line{
@@ -115,7 +121,9 @@ func slp205CollectObjectBlock(lines []diff.Line, start int) []slp205Line {
 			kind:      ln.Kind,
 			newLineNo: ln.NewLineNo,
 			order:     i,
+			depthBase: lineDepthBase,
 		})
+		depth += lineDelta
 		if started && depth <= 0 {
 			break
 		}
@@ -182,12 +190,11 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 		return nil
 	}
 	var candidates []slp205Event
-	baseIndent := -1
+	baseDepth := -1
 	for _, ln := range lines {
 		if slp205CommentOnlyLinePrefix.MatchString(ln.content) {
 			continue
 		}
-		lineIndent := indentationOf(ln.content)
 		specMatches := slp205SpecPathsSpread.FindAllStringIndex(ln.content, -1)
 		for i := range specMatches {
 			match := specMatches[i]
@@ -198,9 +205,10 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 			if !ok {
 				continue
 			}
-			candidates = append(candidates, slp205Event{kind: "spec", line: ln, pos: pos, indent: lineIndent})
-			if baseIndent < 0 || lineIndent < baseIndent {
-				baseIndent = lineIndent
+			depth := ln.depthBase + slp205BraceDepthAt(ln.content, pos)
+			candidates = append(candidates, slp205Event{kind: "spec", line: ln, pos: pos, depth: depth})
+			if baseDepth < 0 || depth < baseDepth {
+				baseDepth = depth
 			}
 		}
 		generatedMatches := slp205GeneratedPathsSpread.FindAllStringIndex(ln.content, -1)
@@ -213,15 +221,16 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 			if !ok {
 				continue
 			}
-			candidates = append(candidates, slp205Event{kind: "generated", line: ln, pos: pos, indent: lineIndent})
-			if baseIndent < 0 || lineIndent < baseIndent {
-				baseIndent = lineIndent
+			depth := ln.depthBase + slp205BraceDepthAt(ln.content, pos)
+			candidates = append(candidates, slp205Event{kind: "generated", line: ln, pos: pos, depth: depth})
+			if baseDepth < 0 || depth < baseDepth {
+				baseDepth = depth
 			}
 		}
 	}
 	events := make([]slp205Event, 0, len(candidates))
 	for _, event := range candidates {
-		if event.indent == baseIndent {
+		if event.depth == baseDepth {
 			events = append(events, event)
 		}
 	}
@@ -246,4 +255,50 @@ func slp205MatchStart(match []int) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func slp205BraceDepthAt(content string, offset int) int {
+	// Count braces before the match while ignoring quoted strings; callers add
+	// the cross-line object depth captured when the block was collected.
+	if content == "" || offset <= 0 {
+		return 0
+	}
+	if offset > len(content) {
+		offset = len(content)
+	}
+	depth := 0
+	var quote rune
+	escaped := false
+	for byteOffset, r := range content {
+		if byteOffset >= offset {
+			break
+		}
+		if quote != 0 {
+			// Inside a string literal, only escapes and the closing quote matter.
+			if escaped {
+				escaped = false
+				continue
+			}
+			if r == '\\' {
+				escaped = true
+				continue
+			}
+			if r == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch r {
+		case '\'', '"', '`':
+			// Enter a quoted region so braces in path strings are ignored.
+			quote = r
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		}
+	}
+	return depth
 }

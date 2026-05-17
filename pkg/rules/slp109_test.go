@@ -136,6 +136,27 @@ func TestSLP109_EmitsAtMostOneFindingPerTargetFunction(t *testing.T) {
 	}
 }
 
+func TestSLP109_NoPanicOnIndentedMultiLineSignature(t *testing.T) {
+	// A multi-line signature whose `) {` body-start line is indented:
+	// braceOff is a raw-line offset, and slicing the trimmed copy used
+	// to panic with slice-out-of-range.
+	d := parseDiff(t, "diff --git a/h.go b/h.go\n"+
+		"--- a/h.go\n"+
+		"+++ b/h.go\n"+
+		"@@ -1,1 +1,8 @@\n"+
+		" package h\n"+
+		"+func outer() {\n"+
+		"+\tinner := func(\n"+
+		"+\t\taValue int,\n"+
+		"+\t) {\n"+
+		"+\t\treturn aValue\n"+
+		"+\t}\n"+
+		"+\t_ = inner\n"+
+		"+}\n")
+	// Must not panic.
+	_ = SLP109{}.Check(d)
+}
+
 func TestSLP109_Description(t *testing.T) {
 	r := SLP109{}
 	if r.ID() != "SLP109" {

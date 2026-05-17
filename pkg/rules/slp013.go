@@ -59,6 +59,12 @@ var strongPrefixKeywords = map[string]bool{
 	"try": true, "catch": true, "throw": true, "raise": true, "with": true,
 }
 
+// slp013InlineCode matches a backtick-delimited span. Inline code in a
+// prose comment is conventionally backtick-quoted, so these spans are
+// stripped before code-shape testing — quoting `=>` or `foo()` in a
+// sentence must not make the sentence look like commented-out code.
+var slp013InlineCode = regexp.MustCompile("`[^`]*`")
+
 // functionCallPattern matches an identifier immediately followed by an
 // opening paren — the canonical shape of a function call. Prose with
 // parentheticals ("(e.g. foo)") has no identifier glued to the `(`,
@@ -76,6 +82,16 @@ func isCodeShapedCommentBody(body string) bool {
 	trimmed := strings.TrimSpace(body)
 	if trimmed == "" {
 		return false
+	}
+	// Drop backtick-quoted inline code so a prose comment that quotes a
+	// token (e.g. "the `=>` form") is not mistaken for real code. A Go
+	// raw-string literal that is genuinely commented out still keeps its
+	// surrounding statement shape (`q := ` ...) outside the backticks.
+	if strings.Contains(trimmed, "`") {
+		trimmed = strings.TrimSpace(slp013InlineCode.ReplaceAllString(trimmed, " "))
+		if trimmed == "" {
+			return false
+		}
 	}
 	// Bullet-list prefixes indicate a documentation example, not a
 	// commented-out statement, even if the bullet content contains

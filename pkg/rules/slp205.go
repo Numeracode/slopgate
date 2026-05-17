@@ -12,8 +12,13 @@ import (
 // path maps override richer JSDoc-derived spec.paths annotations.
 type SLP205 struct{}
 
-func (SLP205) ID() string                { return "SLP205" }
+// ID returns the stable rule identifier.
+func (SLP205) ID() string { return "SLP205" }
+
+// DefaultSeverity returns the default finding severity.
 func (SLP205) DefaultSeverity() Severity { return SeverityWarn }
+
+// Description returns a short rule summary for rule catalogs.
 func (SLP205) Description() string {
 	return "OpenAPI path merge order lets generated paths override annotated spec paths"
 }
@@ -38,6 +43,7 @@ type slp205Event struct {
 	pos  int
 }
 
+// Check scans JS/TS OpenAPI assembly diffs for unsafe path map spread order.
 func (r SLP205) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	if d == nil {
@@ -45,6 +51,7 @@ func (r SLP205) Check(d *diff.Diff) []Finding {
 	}
 
 	for _, f := range d.Files {
+		// Limit this rule to source files where OpenAPI specs are assembled.
 		if f.IsDelete || !isJSOrTSFile(f.Path) || isTestFile(f.Path) ||
 			isGeneratedArtifactPath(f.Path) || isOpenAPIArtifactPath(f.Path) {
 			continue
@@ -79,7 +86,7 @@ func (r SLP205) Check(d *diff.Diff) []Finding {
 }
 
 func slp205CollectObjectBlock(lines []diff.Line, start int) []slp205Line {
-	if start < 0 || start >= len(lines) {
+	if len(lines) == 0 || start < 0 || start >= len(lines) {
 		return nil
 	}
 	var out []slp205Line
@@ -116,6 +123,9 @@ func slp205CollectObjectBlock(lines []diff.Line, start int) []slp205Line {
 }
 
 func slp205BraceDelta(content string) int {
+	if content == "" {
+		return 0
+	}
 	delta := 0
 	for _, r := range content {
 		switch r {
@@ -129,6 +139,9 @@ func slp205BraceDelta(content string) int {
 }
 
 func slp205HasAddedRelevantLine(lines []slp205Line) bool {
+	if len(lines) == 0 {
+		return false
+	}
 	for _, ln := range lines {
 		if ln.kind != diff.LineAdd || slp205CommentOnlyLinePrefix.MatchString(ln.content) {
 			continue
@@ -143,6 +156,9 @@ func slp205HasAddedRelevantLine(lines []slp205Line) bool {
 }
 
 func slp205BadPathMergeOrder(lines []slp205Line) (slp205Line, bool) {
+	if len(lines) == 0 {
+		return slp205Line{}, false
+	}
 	events := slp205MergeEvents(lines)
 	specSeen := false
 	for _, event := range events {
@@ -161,16 +177,29 @@ func slp205BadPathMergeOrder(lines []slp205Line) (slp205Line, bool) {
 }
 
 func slp205MergeEvents(lines []slp205Line) []slp205Event {
+	if len(lines) == 0 {
+		return nil
+	}
 	var events []slp205Event
 	for _, ln := range lines {
 		if slp205CommentOnlyLinePrefix.MatchString(ln.content) {
 			continue
 		}
-		for _, idx := range slp205SpecPathsSpread.FindAllStringIndex(ln.content, -1) {
-			events = append(events, slp205Event{kind: "spec", line: ln, pos: idx[0]})
+		specMatches := slp205SpecPathsSpread.FindAllStringIndex(ln.content, -1)
+		for i := range specMatches {
+			match := specMatches[i]
+			if len(match) == 0 {
+				continue
+			}
+			events = append(events, slp205Event{kind: "spec", line: ln, pos: match[0]})
 		}
-		for _, idx := range slp205GeneratedPathsSpread.FindAllStringIndex(ln.content, -1) {
-			events = append(events, slp205Event{kind: "generated", line: ln, pos: idx[0]})
+		generatedMatches := slp205GeneratedPathsSpread.FindAllStringIndex(ln.content, -1)
+		for i := range generatedMatches {
+			match := generatedMatches[i]
+			if len(match) == 0 {
+				continue
+			}
+			events = append(events, slp205Event{kind: "generated", line: ln, pos: match[0]})
 		}
 	}
 	sort.SliceStable(events, func(i, j int) bool {

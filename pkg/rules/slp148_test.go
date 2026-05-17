@@ -134,6 +134,48 @@ func TestSLP148_NilDiffReturnsNoFindings(t *testing.T) {
 	}
 }
 
+func TestSLP148_IgnoresNonExportedLocals(t *testing.T) {
+	// Non-exported locals: a casing inconsistency here is noise, not a
+	// module-boundary problem, so SLP148 must stay silent.
+	d := parseDiff(t, `diff --git a/a.js b/a.js
+--- a/a.js
++++ b/a.js
+@@ -1,1 +1,2 @@
+ const ready = true;
++const userId = user.id;
+diff --git a/b.js b/b.js
+--- a/b.js
++++ b/b.js
+@@ -1,1 +1,2 @@
+ const ready = true;
++const userID = fetch();
+`)
+	got := SLP148{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for non-exported locals, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP148_FiresOnExportedGoDeclarations(t *testing.T) {
+	d := parseDiff(t, `diff --git a/a.go b/a.go
+--- a/a.go
++++ b/a.go
+@@ -1,1 +1,2 @@
+ package a
++var UserId = 1
+diff --git a/b.go b/b.go
+--- a/b.go
++++ b/b.go
+@@ -1,1 +1,2 @@
+ package b
++var UserID = 2
+`)
+	got := SLP148{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding for inconsistent exported Go declarations (UserId vs UserID)")
+	}
+}
+
 func containsAll(s string, substrs ...string) bool {
 	for _, sub := range substrs {
 		if !strings.Contains(s, sub) {

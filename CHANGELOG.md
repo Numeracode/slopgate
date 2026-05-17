@@ -4,6 +4,7 @@
 
 - **SLP151**: orphaned test — flags a test that calls a function, method, or class which the same diff removed from a non-test source file.
 - **SLP152**: unreachable code after an if/else chain whose every branch (including a terminal else) ends with a terminator.
+- **SLP148** tuned: now scoped to exported / module-boundary declarations (JS/TS `export`, Go capitalised, Python public module-level) instead of every identifier, cutting noise on local-variable casing.
 
 ## v0.0.19 (unreleased)
 

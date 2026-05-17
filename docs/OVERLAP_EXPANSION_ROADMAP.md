@@ -52,12 +52,12 @@ Patterns CR commonly flags that slopgate doesn't yet have.
 
 Rules that catch lots but have minimal CR overlap. Narrow scope to high-risk contexts to ↑ signal.
 
-| Task ID | Rule | Current | Action |
-|---------|------|---------|--------|
-| **SLO-017-tune** | SLP017 | 126 ov / 2,712 un (4%) | Scope to public APIs/config values only — matches CR's semantic naming concerns |
-| **SLO-148-tune** | SLP148 | 124 ov / 2,014 un (6%) | Scope to module boundaries/exported symbols |
-| **SLO-035-narrow** | SLP035 | 152 ov / 1,262 un (11%) | Make severity text-output more CR-like; consider breaking into specific sub-rules |
-| **SLO-070-deprio** | SLP070 | 1 ov / 688 un (<1%) | Downgrade severity — CR doesn't care about directory count |
+| Task ID | Rule | Action | Status |
+|---------|------|--------|--------|
+| **SLO-148-tune** | SLP148 | Scope to exported / module-boundary declarations only | ✅ Complete |
+| **SLO-070-deprio** | SLP070 | Downgrade severity | ✅ Already `info` (advisory, ignored in pre-commit) |
+| **SLO-017-tune** | SLP017 | Scope to public APIs/config values | Open — already `info`; deeper scope-narrowing is optional precision work |
+| **SLO-035-narrow** | SLP035 | Split the grab-bag; drop cosmetic checks | Open — already `info`; split into sub-rules is optional precision work |
 
 ---
 
@@ -117,9 +117,9 @@ These slopgate-only rules are its competitive advantage.
 | SLO-152 | P3 | Dead code after partial return | ✅ Complete |
 | SLO-153 | P3 | Test asserts wrong value | ⛔ Re-scope (not diff-derivable) |
 | SLO-154 | P3 | Mock over-specification | ⛔ Re-scope (not diff-derivable) |
-| SLO-017-tune | P4 | Magic number scope narrow | 🚧 Not started |
-| SLO-148-tune | P4 | Inconsistent naming scope narrow | 🚧 Not started |
-| SLO-035-narrow | P4 | General quality specificity | 🚧 Not started |
-| SLO-070-deprio | P4 | Too-many-dirs severity downgrade | 🚧 Not started |
+| SLO-148-tune | P4 | Inconsistent naming scope narrow | ✅ Complete |
+| SLO-070-deprio | P4 | Too-many-dirs severity downgrade | ✅ Already `info` |
+| SLO-017-tune | P4 | Magic number scope narrow | Open (already `info`) |
+| SLO-035-narrow | P4 | General quality specificity | Open (already `info`) |
 
 **Next session pick-up:** Follow up on CR re-review of **SLO-204** (PR #26 — code complete, CI passed, awaiting CR re-analysis). SLO-207 (transaction rollback) is now complete. SLO-202, SLO-203, and SLO-058 tuning are complete. Next: start **SLO-098-expand** (P2: route w/o test broadened).

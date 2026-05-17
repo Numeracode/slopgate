@@ -203,7 +203,7 @@ func slp148ExportedDecls(content, filePath string) []string {
 		}
 	case isPythonFile(filePath):
 		// Module-level only (unindented) and public (no leading _).
-		if content != "" && content[0] != ' ' && content[0] != '\t' {
+		if len(content) > 0 && content[0] != ' ' && content[0] != '\t' {
 			if m := slp148PyDef.FindStringSubmatch(cleaned); len(m) > 1 && !strings.HasPrefix(m[1], "_") {
 				names = append(names, m[1])
 			}

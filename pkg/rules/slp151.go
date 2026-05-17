@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -129,23 +130,22 @@ func (r SLP151) Check(d *diff.Diff) []Finding {
 				}
 				code := stripCommentAndStrings(ln.Content)
 				for _, m := range slp151Call.FindAllStringSubmatch(code, -1) {
-					if len(m) < 2 {
-						continue
+					if len(m) > 1 {
+						name := m[1]
+						src, isOrphan := orphaned[name]
+						if !isOrphan || localDefs[name] || flaggedLine[ln.NewLineNo] {
+							continue
+						}
+						flaggedLine[ln.NewLineNo] = true
+						out = append(out, Finding{
+							RuleID:   r.ID(),
+							Severity: r.DefaultSeverity(),
+							File:     f.Path,
+							Line:     ln.NewLineNo,
+							Message:  fmt.Sprintf("test calls %s(), which this diff removed from %s — orphaned test", name, src),
+							Snippet:  strings.TrimSpace(ln.Content),
+						})
 					}
-					name := m[1]
-					src, isOrphan := orphaned[name]
-					if !isOrphan || localDefs[name] || flaggedLine[ln.NewLineNo] {
-						continue
-					}
-					flaggedLine[ln.NewLineNo] = true
-					out = append(out, Finding{
-						RuleID:   r.ID(),
-						Severity: r.DefaultSeverity(),
-						File:     f.Path,
-						Line:     ln.NewLineNo,
-						Message:  "test calls " + name + "(), which this diff removed from " + src + " — orphaned test",
-						Snippet:  strings.TrimSpace(ln.Content),
-					})
 				}
 			}
 		}

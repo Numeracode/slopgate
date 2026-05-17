@@ -38,7 +38,8 @@ var slp033ReactHooks = []string{
 }
 
 // slp033NamespaceImport matches namespace imports like "import * as React from 'react'".
-var slp033NamespaceImport = regexp.MustCompile(`(?i)import\s+\*\s+as\s+(\w+)\s+from\s+["']`)
+var slp033NamespaceImport = regexp.MustCompile(`(?i)import\s+(?:type\s+)?\*\s+as\s+(\w+)\s+from\s+["']`)
+var slp033SideEffectImport = regexp.MustCompile(`(?i)^import\s+["'][^"']+["']\s*;?$`)
 
 func (r SLP033) Check(d *diff.Diff) []Finding {
 	var out []Finding
@@ -56,92 +57,8 @@ func (r SLP033) Check(d *diff.Diff) []Finding {
 			continue
 		}
 
-		// Extract ALL imports from the entire file first
-		importedItems := make(map[string]bool)
-		for _, h := range f.Hunks {
-			for _, ln := range h.Lines {
-				if ln.Kind == diff.LineAdd {
-					content := ln.Content
-					trimmedLower := strings.TrimSpace(strings.ToLower(content))
-					if !strings.HasPrefix(trimmedLower, "import") {
-						continue
-					}
-
-					// Handle namespace imports: import * as React from 'react'
-					if matches := slp033NamespaceImport.FindStringSubmatch(content); len(matches) >= 2 {
-						importedItems[matches[1]] = true
-						continue
-					}
-
-					// Determine which type of import statement this is
-					if strings.Contains(content, "{") && strings.Contains(content, "}") {
-						// Handle destructured imports like: import { useState, useEffect } from 'react'
-						start := strings.Index(content, "{")
-						end := strings.Index(content, "}")
-						if start != -1 && end != -1 && end > start {
-							destructured := content[start+1 : end]
-							items := strings.Split(destructured, ",")
-							for _, item := range items {
-								item = strings.TrimSpace(item)
-								item = strings.Trim(item, "{}* ")
-								if item != "" {
-									importedItems[item] = true
-								}
-							}
-						}
-					} else if strings.Contains(content, ",") && strings.Contains(content, "from") {
-						// Handle mixed imports like: import React, { Component } from 'react'
-						parts := strings.Split(content, " from ")
-						if len(parts) >= 2 {
-							importPart := parts[0]
-							importPart = strings.TrimPrefix(importPart, "import")
-							importPart = strings.TrimSpace(importPart)
-
-							subParts := strings.Split(importPart, ",")
-							for _, subPart := range subParts {
-								subPart = strings.TrimSpace(subPart)
-								if strings.Contains(subPart, "{") && strings.Contains(subPart, "}") {
-									start := strings.Index(subPart, "{")
-									end := strings.Index(subPart, "}")
-									if start != -1 && end != -1 && end > start {
-										destructured := subPart[start+1 : end]
-										innerItems := strings.Split(destructured, ",")
-										for _, item := range innerItems {
-											item = strings.TrimSpace(item)
-											item = strings.Trim(item, "{}* ")
-											if item != "" {
-												importedItems[item] = true
-											}
-										}
-									}
-								} else {
-									subPart = strings.Trim(subPart, "{}* ")
-									if subPart != "" {
-										importedItems[subPart] = true
-									}
-								}
-							}
-						}
-					} else if strings.Contains(content, " from ") {
-						// Handle default imports like: import React from 'react'
-						parts := strings.Split(content, " from ")
-						if len(parts) >= 2 {
-							importPart := parts[0]
-							importPart = strings.TrimPrefix(importPart, "import")
-							importPart = strings.TrimSpace(importPart)
-
-							defaultImport := strings.TrimSpace(importPart)
-							if defaultImport != "" && !strings.Contains(defaultImport, "{") {
-								defaultImport = strings.TrimRight(defaultImport, ", ")
-								if defaultImport != "" {
-									importedItems[defaultImport] = true
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+		importedItems := slp033CollectImportedItems(f)
+		slp033CollectImportedItemsFromFile(d, f.Path, importedItems)
 
 		// Now check for usage of common types/hooks without imports across all hunks
 		for _, h := range f.Hunks {
@@ -155,15 +72,7 @@ func (r SLP033) Check(d *diff.Diff) []Finding {
 				// Check for React hooks usage without import
 				for _, hook := range slp033ReactHooks {
 					if containsWholeWord(content, hook) && !importedItems[hook] {
-						// Skip if used via namespace (e.g., React.useState when React is imported)
-						namespaceOk := false
-						for ns := range importedItems {
-							if strings.Contains(content, ns+"."+hook) {
-								namespaceOk = true
-								break
-							}
-						}
-						if namespaceOk {
+						if slp033HasImportedNamespaceReference(content, hook, importedItems) {
 							continue
 						}
 						out = append(out, Finding{
@@ -181,6 +90,9 @@ func (r SLP033) Check(d *diff.Diff) []Finding {
 				// Check for common types usage without import
 				for _, typ := range slp033CommonTypes {
 					if containsWholeWord(content, typ) && !importedItems[typ] {
+						if slp033HasImportedNamespaceReference(content, typ, importedItems) {
+							continue
+						}
 						if isTypeContext(content, typ) {
 							out = append(out, Finding{
 								RuleID:   r.ID(),
@@ -198,6 +110,161 @@ func (r SLP033) Check(d *diff.Diff) []Finding {
 		}
 	}
 	return out
+}
+
+func slp033CollectImportedItems(f diff.File) map[string]bool {
+	importedItems := make(map[string]bool)
+	for _, h := range f.Hunks {
+		var visibleLines []string
+		for _, ln := range h.Lines {
+			if ln.Kind != diff.LineAdd && ln.Kind != diff.LineContext {
+				continue
+			}
+			visibleLines = append(visibleLines, ln.Content)
+		}
+		slp033CollectImportedItemsFromLines(visibleLines, importedItems)
+	}
+
+	return importedItems
+}
+
+func slp033CollectImportedItemsFromFile(d *diff.Diff, relPath string, importedItems map[string]bool) {
+	if d == nil || relPath == "" || importedItems == nil {
+		return
+	}
+
+	content, ok := slp007FileContent(d, relPath)
+	if !ok || content == "" {
+		return
+	}
+
+	slp033CollectImportedItemsFromLines(strings.Split(content, "\n"), importedItems)
+}
+
+func slp033CollectImportedItemsFromLines(lines []string, importedItems map[string]bool) {
+	if len(lines) == 0 || importedItems == nil {
+		return
+	}
+
+	var currentImport strings.Builder
+	collecting := false
+
+	for _, line := range lines {
+		content := strings.TrimSpace(line)
+		if content == "" {
+			continue
+		}
+
+		if !collecting {
+			if !strings.HasPrefix(strings.ToLower(content), "import") {
+				continue
+			}
+			currentImport.Reset()
+			currentImport.WriteString(content)
+			collecting = slp033ImportNeedsMoreLines(currentImport.String())
+			if !collecting {
+				slp033RecordImportItems(currentImport.String(), importedItems)
+			}
+			continue
+		}
+
+		currentImport.WriteByte(' ')
+		currentImport.WriteString(content)
+		if !slp033ImportNeedsMoreLines(currentImport.String()) {
+			slp033RecordImportItems(currentImport.String(), importedItems)
+			currentImport.Reset()
+			collecting = false
+		}
+	}
+}
+
+func slp033ImportNeedsMoreLines(statement string) bool {
+	statement = strings.TrimSpace(statement)
+	if statement == "" {
+		return false
+	}
+
+	if slp033SideEffectImport.MatchString(statement) {
+		return false
+	}
+
+	return !strings.Contains(strings.ToLower(statement), " from ")
+}
+
+func slp033RecordImportItems(statement string, importedItems map[string]bool) {
+	statement = strings.TrimSpace(statement)
+	if statement == "" || importedItems == nil {
+		return
+	}
+
+	if matches := slp033NamespaceImport.FindStringSubmatch(statement); len(matches) >= 2 {
+		importedItems[matches[1]] = true
+		return
+	}
+
+	lowerStatement := strings.ToLower(statement)
+	fromIndex := strings.LastIndex(lowerStatement, " from ")
+	if fromIndex == -1 {
+		return
+	}
+
+	importPart := strings.TrimSpace(strings.TrimPrefix(statement[:fromIndex], "import"))
+	importPart = strings.TrimSpace(strings.TrimPrefix(importPart, "type "))
+	if importPart == "" || strings.HasPrefix(importPart, `"`) || strings.HasPrefix(importPart, `'`) {
+		return
+	}
+
+	if braceStart := strings.Index(importPart, "{"); braceStart != -1 {
+		defaultPart := strings.TrimSpace(strings.TrimSuffix(importPart[:braceStart], ","))
+		slp033RecordImportSpecifier(defaultPart, importedItems)
+
+		braceEnd := strings.LastIndex(importPart, "}")
+		if braceEnd == -1 || braceEnd <= braceStart {
+			return
+		}
+		for _, spec := range strings.Split(importPart[braceStart+1:braceEnd], ",") {
+			slp033RecordImportSpecifier(spec, importedItems)
+		}
+		return
+	}
+
+	slp033RecordImportSpecifier(importPart, importedItems)
+}
+
+func slp033RecordImportSpecifier(spec string, importedItems map[string]bool) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" || importedItems == nil {
+		return
+	}
+
+	spec = strings.TrimPrefix(spec, "type ")
+	spec = strings.TrimSpace(strings.Trim(spec, "{}* "))
+	if spec == "" {
+		return
+	}
+
+	if aliasIndex := strings.LastIndex(spec, " as "); aliasIndex != -1 {
+		spec = strings.TrimSpace(spec[aliasIndex+4:])
+	}
+	if spec == "" {
+		return
+	}
+
+	importedItems[spec] = true
+}
+
+func slp033HasImportedNamespaceReference(content, ident string, importedItems map[string]bool) bool {
+	if content == "" || ident == "" || len(importedItems) == 0 {
+		return false
+	}
+
+	for ns := range importedItems {
+		if strings.Contains(content, ns+"."+ident) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // isTypeContext checks if a type name appears in a type annotation context

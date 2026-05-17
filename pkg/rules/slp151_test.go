@@ -135,6 +135,52 @@ diff --git a/m_test.go b/m_test.go
 	}
 }
 
+func TestSLP151_FiresOnRemovedTSMethod(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc.ts b/svc.ts
+--- a/svc.ts
++++ b/svc.ts
+@@ -1,5 +1,2 @@
+ class Service {
+-  fetchAll(): string[] {
+-    return [];
+-  }
+ }
+diff --git a/svc.test.ts b/svc.test.ts
+--- a/svc.test.ts
++++ b/svc.test.ts
+@@ -1,1 +1,2 @@
+ const s = new Service();
++test("fetchAll", () => { s.fetchAll(); });
+`)
+	got := SLP151{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected an orphaned-test finding for a test calling a removed TS method")
+	}
+}
+
+func TestSLP151_NoFireOnControlFlowKeywords(t *testing.T) {
+	// A removed `for (...) {` must not register `for` as a definition.
+	d := parseDiff(t, `diff --git a/loop.ts b/loop.ts
+--- a/loop.ts
++++ b/loop.ts
+@@ -1,4 +1,1 @@
+ const xs = [1];
+-for (const x of xs) {
+-  use(x);
+-}
+diff --git a/loop.test.ts b/loop.test.ts
+--- a/loop.test.ts
++++ b/loop.test.ts
+@@ -1,1 +1,2 @@
+ const ready = true;
++test("loop", () => { for (const y of [1]) {} });
+`)
+	got := SLP151{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings: control-flow keywords are not definitions, got %d", len(got))
+	}
+}
+
 func TestSLP151_Description(t *testing.T) {
 	r := SLP151{}
 	if r.ID() != "SLP151" {

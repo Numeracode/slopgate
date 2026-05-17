@@ -28,10 +28,20 @@ var (
 	slp151JSDef       = regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)`)
 	slp151JSAssignDef = regexp.MustCompile(`^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)`)
 	slp151ClassDef    = regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)`)
+	slp151JSMethodDef = regexp.MustCompile(`^\s*(?:(?:public|private|protected|static|readonly|async|get|set)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{;]*)?\{`)
 	slp151PyDef       = regexp.MustCompile(`^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)`)
 	slp151PyClass     = regexp.MustCompile(`^\s*class\s+([A-Za-z_]\w*)`)
 	slp151Call        = regexp.MustCompile(`([A-Za-z_$][\w$]*)\s*\(`)
 )
+
+// slp151NonNames are keywords the method-definition pattern can capture
+// from control-flow statements (`if (...) {`); they are never symbol
+// definitions and must be discarded.
+var slp151NonNames = map[string]bool{
+	"if": true, "for": true, "while": true, "switch": true,
+	"catch": true, "do": true, "else": true, "function": true,
+	"return": true, "with": true,
+}
 
 // slp151MinNameLen is the shortest symbol name SLP151 will act on;
 // shorter names collide too easily across unrelated packages.
@@ -45,13 +55,13 @@ func slp151DefNames(line, filePath string) []string {
 	case isGoFile(filePath):
 		regexes = []*regexp.Regexp{slp151GoDef}
 	case isJSOrTSFile(filePath):
-		regexes = []*regexp.Regexp{slp151JSDef, slp151JSAssignDef, slp151ClassDef}
+		regexes = []*regexp.Regexp{slp151JSDef, slp151JSAssignDef, slp151ClassDef, slp151JSMethodDef}
 	case isPythonFile(filePath):
 		regexes = []*regexp.Regexp{slp151PyDef, slp151PyClass}
 	}
 	var names []string
 	for _, re := range regexes {
-		if m := re.FindStringSubmatch(line); len(m) > 1 && m[1] != "" {
+		if m := re.FindStringSubmatch(line); len(m) > 1 && m[1] != "" && !slp151NonNames[m[1]] {
 			names = append(names, m[1])
 		}
 	}

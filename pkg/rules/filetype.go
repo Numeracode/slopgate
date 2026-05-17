@@ -51,6 +51,28 @@ func isSourceLikeFile(path string) bool {
 	}
 }
 
+func normalizedSlashPath(path string) string {
+	return strings.ReplaceAll(strings.ToLower(path), "\\", "/")
+}
+
+func isGeneratedArtifactPath(path string) bool {
+	lower := normalizedSlashPath(path)
+	return strings.Contains(lower, "/generated/")
+}
+
+func isOpenAPIArtifactPath(path string) bool {
+	lower := normalizedSlashPath(path)
+	base := filepath.Base(lower)
+	if strings.HasSuffix(base, ".openapi.json") || strings.HasSuffix(base, ".openapi.yaml") || strings.HasSuffix(base, ".openapi.yml") {
+		return true
+	}
+	ext := strings.ToLower(filepath.Ext(base))
+	if ext != ".json" && ext != ".yaml" && ext != ".yml" {
+		return false
+	}
+	return strings.Contains(lower, "/openapi/")
+}
+
 // isJavaTestFile reports whether path is a Java test file.
 // Convention: file name contains "Test" (JUnit) or file lives under
 // src/test/ (Maven/Gradle convention).

@@ -31,7 +31,11 @@ BENCHMARK_MODE_BY_SEVERITY = {
     "warn": "parity",
     "info": "advisory",
 }
-RULE_BENCHMARK_MODE_OVERRIDES: dict[str, str] = {}
+RULE_BENCHMARK_MODE_OVERRIDES: dict[str, str] = {
+    "SLP017": "advisory",
+    "SLP035": "advisory",
+    "SLP053": "advisory",
+}
 BENCHMARK_TIER_DESCRIPTIONS = {
     "all_rules": "Every Slopgate finding, preserving legacy benchmark behavior.",
     "block_warn_only": "Only block and warn findings. Info findings are excluded.",

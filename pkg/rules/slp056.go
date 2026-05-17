@@ -103,7 +103,7 @@ func slp056MatchesPrivateKey(content string) bool {
 func (r SLP056) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	for _, f := range d.Files {
-		if f.IsDelete {
+		if f.IsDelete || isOpenAPIArtifactPath(f.Path) {
 			continue
 		}
 		for _, ln := range f.AddedLines() {

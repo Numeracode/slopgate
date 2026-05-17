@@ -135,6 +135,21 @@ func TestSLP056_SkipsPlaceholder(t *testing.T) {
 	}
 }
 
+func TestSLP056_SkipsOpenAPIArtifacts(t *testing.T) {
+	d := parseDiff(t, `diff --git a/docs/contracts/openapi/whimsy-api.openapi.json b/docs/contracts/openapi/whimsy-api.openapi.json
+--- a/docs/contracts/openapi/whimsy-api.openapi.json
++++ b/docs/contracts/openapi/whimsy-api.openapi.json
+@@ -1,1 +1,2 @@
+ {
++  "token": "real-looking-value"
+ }
+`)
+	got := SLP056{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for generated OpenAPI artifact, got %d: %+v", len(got), got)
+	}
+}
+
 func TestSLP056_Description(t *testing.T) {
 	r := SLP056{}
 	if r.ID() != "SLP056" {

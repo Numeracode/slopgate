@@ -208,6 +208,43 @@ func TestSLP013_IgnoresBulletListedCodeExamples(t *testing.T) {
 	}
 }
 
+func TestSLP013_IgnoresProseQuotingCodeInBackticks(t *testing.T) {
+	// A prose comment that quotes operators and calls in backticks is
+	// documentation, not commented-out code.
+	d := parseDiff(t, `diff --git a/a.go b/a.go
+--- a/a.go
++++ b/a.go
+@@ -1,1 +1,5 @@
+ package a
++// An arrow function with a `+"`=> expr`"+` body is judged at once,
++// while a `+"`=> {`"+` block body and a `+"`handler()`"+` call fall
++// through to the `+"`scanBody()`"+` pass described below.
+ func F() {}
+`)
+	got := SLP013{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for prose quoting code in backticks, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP013_FiresOnCommentedGoRawStringStatement(t *testing.T) {
+	// A genuinely commented-out Go statement keeps its assignment shape
+	// outside the backticks and must still be flagged.
+	d := parseDiff(t, "diff --git a/a.go b/a.go\n"+
+		"--- a/a.go\n"+
+		"+++ b/a.go\n"+
+		"@@ -1,1 +1,5 @@\n"+
+		" package a\n"+
+		"+// q := `SELECT * FROM users`\n"+
+		"+// rows := db.Query(q)\n"+
+		"+// return rows.Err()\n"+
+		" func F() {}\n")
+	got := SLP013{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding for commented-out Go statements that use a raw string")
+	}
+}
+
 func TestSLP013_Description(t *testing.T) {
 	r := SLP013{}
 	if r.ID() != "SLP013" {

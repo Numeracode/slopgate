@@ -147,6 +147,16 @@ function buildSpec(spec) {
 			if len(got) != tt.want {
 				t.Fatalf("got %d findings, want %d: %+v", len(got), tt.want, got)
 			}
+			if tt.want > 0 {
+				for _, finding := range got {
+					if finding.RuleID != "SLP205" {
+						t.Fatalf("RuleID = %q, want SLP205: %+v", finding.RuleID, finding)
+					}
+					if finding.Line <= 0 {
+						t.Fatalf("Line = %d, want positive source location: %+v", finding.Line, finding)
+					}
+				}
+			}
 		})
 	}
 }

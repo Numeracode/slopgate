@@ -237,9 +237,6 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 func slp205MatchStart(match []int) (int, bool) {
 	// regexp.FindAllStringIndex returns [start, end]; keep access centralized
 	// so scanner rules see the defensive checks before any position is used.
-	if match == nil || len(match) == 0 {
-		return 0, false
-	}
 	if len(match) < 2 {
 		return 0, false
 	}

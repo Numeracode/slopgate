@@ -26,6 +26,12 @@ from pathlib import Path
 from typing import Any
 
 BENCHMARK_DIR = Path("/srv/storage/shared/slopgate-benchmarks")
+TIER_ORDER = ("all_rules", "block_warn_only", "benchmark_eligible")
+TIER_LABELS = {
+    "all_rules": "All Rules",
+    "block_warn_only": "Block/Warn",
+    "benchmark_eligible": "Eligible",
+}
 
 
 def load_benchmark(path: Path) -> dict[str, Any] | None:
@@ -61,38 +67,131 @@ def collect_benchmarks(repo: str | None = None, pr_nums: list[int] | None = None
     return results
 
 
+def _legacy_all_rules_tier(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "slopgate": data.get("slopgate", {}),
+        "scores": data.get("scores", {}),
+        "streams": data.get("streams", {}),
+    }
+
+
+def get_tier(data: dict[str, Any], tier_name: str) -> dict[str, Any] | None:
+    tiers = data.get("benchmark_tiers")
+    if isinstance(tiers, dict):
+        tier = tiers.get(tier_name)
+        if isinstance(tier, dict):
+            return tier
+    if tier_name == "all_rules":
+        return _legacy_all_rules_tier(data)
+    return None
+
+
+def get_stream_total(data: dict[str, Any], stream_name: str) -> int:
+    legacy_map = {
+        "coderabbit_all": "coderabbit",
+        "coderabbit_actionable": "coderabbit_actionable",
+        "sentry": "sentry",
+        "actionable_plus_sentry": "actionable_plus_sentry",
+    }
+    streams = data.get("streams", {})
+    stream = streams.get(stream_name, {}) if isinstance(streams, dict) else {}
+    total = stream.get("total")
+    if isinstance(total, int):
+        return total
+    legacy = data.get(legacy_map[stream_name], {})
+    return int(legacy.get("total", 0))
+
+
+def tier_metrics(data: dict[str, Any], tier_name: str) -> dict[str, Any] | None:
+    tier = get_tier(data, tier_name)
+    if tier is None:
+        return None
+    scores = tier.get("scores", {})
+    return {
+        "slopgate_total": int(tier.get("slopgate", {}).get("total", 0)),
+        "review_total": get_stream_total(data, "coderabbit_all"),
+        "overlap_all": int(scores.get("overlap_all", 0)),
+        "coverage_all_pct": float(scores.get("coverage_all_pct", 0)),
+        "precision_proxy_all_pct": float(scores.get("precision_proxy_all_pct", 0)),
+    }
+
+
+def format_tier_summary(data: dict[str, Any], tier_name: str) -> str:
+    metrics = tier_metrics(data, tier_name)
+    if metrics is None:
+        return "-"
+    return (
+        f"SG {metrics['slopgate_total']} "
+        f"Ov {metrics['overlap_all']} "
+        f"Cov {metrics['coverage_all_pct']:.1f}% "
+        f"Prec {metrics['precision_proxy_all_pct']:.1f}%"
+    )
+
+
+def aggregate_tier_metrics(benchmarks: list[dict[str, Any]], tier_name: str) -> dict[str, Any] | None:
+    available = [tier_metrics(b, tier_name) for b in benchmarks]
+    available = [metrics for metrics in available if metrics is not None]
+    if not available:
+        return None
+    slopgate_total = sum(metrics["slopgate_total"] for metrics in available)
+    review_total = sum(metrics["review_total"] for metrics in available)
+    overlap_all = sum(metrics["overlap_all"] for metrics in available)
+    return {
+        "slopgate_total": slopgate_total,
+        "overlap_all": overlap_all,
+        "coverage_all_pct": round((overlap_all / review_total * 100) if review_total else 0, 1),
+        "precision_proxy_all_pct": round((overlap_all / slopgate_total * 100) if slopgate_total else 0, 1),
+    }
+
+
 def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
     """Format benchmarks as a markdown table."""
     if not benchmarks:
         return f"## {title}\n\nNo benchmarks found.\n"
 
     lines = [f"## {title}\n" if title else ""]
-    lines.append("| Repo | PR | Slopgate | CodeRabbit | Actionable | Sentry | Combined | Overlap | Ov% |")
-    lines.append("|------|-----|----------|------------|------------|--------|----------|---------|-----|")
+    lines.append("| Repo | PR | CodeRabbit | Actionable | Sentry | Combined | All Rules | Block/Warn | Eligible |")
+    lines.append("|------|-----|------------|------------|--------|----------|-----------|------------|----------|")
 
     for b in benchmarks:
         repo = b.get("repo", "?")
         pr = b.get("pr", "?")
-        sg = b.get("slopgate", {}).get("total", 0)
-        cr = b.get("coderabbit", {}).get("total", 0)
-        cr_act = b.get("coderabbit_actionable", {}).get("total", 0)
-        sentry = b.get("sentry", {}).get("total", 0)
-        combined = b.get("actionable_plus_sentry", {}).get("total", 0)
-        scores = b.get("scores", {})
-        overlap = scores.get("overlap_all", 0)
-        overlap_pct = scores.get("coverage_all_pct", 0)
+        cr = get_stream_total(b, "coderabbit_all")
+        cr_act = get_stream_total(b, "coderabbit_actionable")
+        sentry = get_stream_total(b, "sentry")
+        combined = get_stream_total(b, "actionable_plus_sentry")
 
-        lines.append(f"| {repo} | #{pr} | {sg} | {cr} | {cr_act} | {sentry} | {combined} | {overlap} | {overlap_pct:.1f}% |")
+        lines.append(
+            f"| {repo} | #{pr} | {cr} | {cr_act} | {sentry} | {combined} | "
+            f"{format_tier_summary(b, 'all_rules')} | "
+            f"{format_tier_summary(b, 'block_warn_only')} | "
+            f"{format_tier_summary(b, 'benchmark_eligible')} |"
+        )
 
-    # Totals
-    total_sg = sum(b.get("slopgate", {}).get("total", 0) for b in benchmarks)
-    total_cr = sum(b.get("coderabbit", {}).get("total", 0) for b in benchmarks)
-    total_act = sum(b.get("coderabbit_actionable", {}).get("total", 0) for b in benchmarks)
-    total_sentry = sum(b.get("sentry", {}).get("total", 0) for b in benchmarks)
-    total_combined = sum(b.get("actionable_plus_sentry", {}).get("total", 0) for b in benchmarks)
-    total_overlap = sum(b.get("scores", {}).get("overlap_all", 0) for b in benchmarks)
+    total_cr = sum(get_stream_total(b, "coderabbit_all") for b in benchmarks)
+    total_act = sum(get_stream_total(b, "coderabbit_actionable") for b in benchmarks)
+    total_sentry = sum(get_stream_total(b, "sentry") for b in benchmarks)
+    total_combined = sum(get_stream_total(b, "actionable_plus_sentry") for b in benchmarks)
 
-    lines.append(f"| **Total** | | **{total_sg}** | **{total_cr}** | **{total_act}** | **{total_sentry}** | **{total_combined}** | **{total_overlap}** | |")
+    tier_totals = {tier_name: aggregate_tier_metrics(benchmarks, tier_name) for tier_name in TIER_ORDER}
+
+    def total_cell(tier_name: str) -> str:
+        metrics = tier_totals[tier_name]
+        if metrics is None:
+            return "-"
+        return (
+            f"SG {metrics['slopgate_total']} "
+            f"Ov {metrics['overlap_all']} "
+            f"Cov {metrics['coverage_all_pct']:.1f}% "
+            f"Prec {metrics['precision_proxy_all_pct']:.1f}%"
+        )
+
+    lines.append(
+        f"| **Total** | | **{total_cr}** | **{total_act}** | **{total_sentry}** | **{total_combined}** | "
+        f"**{total_cell('all_rules')}** | "
+        f"**{total_cell('block_warn_only')}** | "
+        f"**{total_cell('benchmark_eligible')}** |"
+    )
     lines.append("")
 
     return "\n".join(lines)
@@ -135,22 +234,37 @@ def compare_files(file1: str, file2: str) -> str:
     lines.append("| Metric | Before | After | Change |")
     lines.append("|--------|--------|-------|--------|")
 
-    metrics = [
-        ("Slopgate Total", "slopgate.total"),
-        ("CodeRabbit Total", "coderabbit.total"),
-        ("CodeRabbit Actionable", "coderabbit_actionable.total"),
-        ("Sentry Total", "sentry.total"),
-        ("Actionable+Sentry", "actionable_plus_sentry.total"),
-        ("Overlap (all)", "scores.overlap_all"),
-        ("Overlap (actionable)", "scores.overlap_actionable"),
-        ("Overlap (actionable+sentry)", "scores.overlap_actionable_plus_sentry"),
-        ("Coverage (all %)", "scores.coverage_all_pct"),
-        ("Coverage (actionable %)", "scores.coverage_actionable_pct"),
+    metrics: list[tuple[str, Any, Any]] = [
+        ("CodeRabbit Total", get_stream_total(b1, "coderabbit_all"), get_stream_total(b2, "coderabbit_all")),
+        ("CodeRabbit Actionable", get_stream_total(b1, "coderabbit_actionable"), get_stream_total(b2, "coderabbit_actionable")),
+        ("Sentry Total", get_stream_total(b1, "sentry"), get_stream_total(b2, "sentry")),
+        ("Actionable+Sentry", get_stream_total(b1, "actionable_plus_sentry"), get_stream_total(b2, "actionable_plus_sentry")),
+        ("Overlap (actionable)", _get_nested(b1, "scores.overlap_actionable", 0), _get_nested(b2, "scores.overlap_actionable", 0)),
+        (
+            "Overlap (actionable+sentry)",
+            _get_nested(b1, "scores.overlap_actionable_plus_sentry", 0),
+            _get_nested(b2, "scores.overlap_actionable_plus_sentry", 0),
+        ),
     ]
+    for tier_name in TIER_ORDER:
+        metrics.extend(
+            [
+                (f"{TIER_LABELS[tier_name]} Slopgate", _tier_metric_value(b1, tier_name, "slopgate_total"), _tier_metric_value(b2, tier_name, "slopgate_total")),
+                (f"{TIER_LABELS[tier_name]} Overlap", _tier_metric_value(b1, tier_name, "overlap_all"), _tier_metric_value(b2, tier_name, "overlap_all")),
+                (
+                    f"{TIER_LABELS[tier_name]} Coverage %",
+                    _tier_metric_value(b1, tier_name, "coverage_all_pct"),
+                    _tier_metric_value(b2, tier_name, "coverage_all_pct"),
+                ),
+                (
+                    f"{TIER_LABELS[tier_name]} Precision %",
+                    _tier_metric_value(b1, tier_name, "precision_proxy_all_pct"),
+                    _tier_metric_value(b2, tier_name, "precision_proxy_all_pct"),
+                ),
+            ]
+        )
 
-    for label, path in metrics:
-        v1 = _get_nested(b1, path, 0)
-        v2 = _get_nested(b2, path, 0)
+    for label, v1, v2 in metrics:
         if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
             diff = v2 - v1
             sign = "+" if diff > 0 else ""
@@ -172,6 +286,13 @@ def _get_nested(data: dict[str, Any], path: str, default: Any = None) -> Any:
         else:
             return default
     return current
+
+
+def _tier_metric_value(data: dict[str, Any], tier_name: str, key: str) -> Any:
+    metrics = tier_metrics(data, tier_name)
+    if metrics is None:
+        return "-"
+    return metrics[key]
 
 
 def main() -> int:

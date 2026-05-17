@@ -111,11 +111,41 @@ function buildSpec(spec) {
 --- a/api/src/lib/openapi.js
 +++ b/api/src/lib/openapi.js
 @@ -10,3 +10,4 @@
- function buildSpec(spec) {
+function buildSpec(spec) {
 +  // spec.paths = { ...(spec.paths || {}), ...oas7Paths };
+}
+`,
+			want: 0,
+		},
+		{
+			name: "does not count inline commented generated spread",
+			diff: `diff --git a/api/src/lib/openapi.js b/api/src/lib/openapi.js
+--- a/api/src/lib/openapi.js
++++ b/api/src/lib/openapi.js
+@@ -10,3 +10,7 @@
+ function buildSpec(spec) {
++  spec.paths = {
++    ...(spec.paths || {}), // ...oas7Paths is documentation, not a spread
++  };
  }
 `,
 			want: 0,
+		},
+		{
+			name: "ignores commented brace while tracking object depth",
+			diff: `diff --git a/api/src/lib/openapi.js b/api/src/lib/openapi.js
+--- a/api/src/lib/openapi.js
++++ b/api/src/lib/openapi.js
+@@ -10,3 +10,8 @@
+ function buildSpec(spec) {
++  spec.paths = {
++    ...(spec.paths || {}),
++    // }
++    ...oas7Paths,
++  };
+ }
+`,
+			want: 1,
 		},
 		{
 			name: "does not flag unrelated schema merge",

@@ -32,6 +32,7 @@ var (
 
 type slp205Line struct {
 	content   string
+	clean     string
 	kind      diff.LineKind
 	newLineNo int
 	order     int
@@ -102,22 +103,24 @@ func slp205CollectObjectBlock(lines []diff.Line, start int) []slp205Line {
 			continue
 		}
 		content := ln.Content
+		cleanContent := slp205StripJSCommentsOutsideStrings(content)
 		lineDepthBase := depth
 		var lineDelta int
 		if !started {
-			open := strings.Index(content, "{")
+			open := strings.Index(cleanContent, "{")
 			if open < 0 {
 				continue
 			}
 			started = true
 			lineDepthBase = 0
-			lineDelta = slp205BraceDelta(content[open:])
+			lineDelta = slp205BraceDelta(cleanContent[open:])
 		} else {
-			lineDelta = slp205BraceDelta(content)
+			lineDelta = slp205BraceDelta(cleanContent)
 		}
 
 		out = append(out, slp205Line{
 			content:   content,
+			clean:     cleanContent,
 			kind:      ln.Kind,
 			newLineNo: ln.NewLineNo,
 			order:     i,
@@ -155,9 +158,9 @@ func slp205HasAddedRelevantLine(lines []slp205Line) bool {
 		if ln.kind != diff.LineAdd || slp205CommentOnlyLinePrefix.MatchString(ln.content) {
 			continue
 		}
-		if slp205SpecPathsAssign.MatchString(ln.content) ||
-			slp205SpecPathsSpread.MatchString(ln.content) ||
-			slp205GeneratedPathsSpread.MatchString(ln.content) {
+		if slp205SpecPathsAssign.MatchString(ln.clean) ||
+			slp205SpecPathsSpread.MatchString(ln.clean) ||
+			slp205GeneratedPathsSpread.MatchString(ln.clean) {
 			return true
 		}
 	}
@@ -195,7 +198,7 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 		if slp205CommentOnlyLinePrefix.MatchString(ln.content) {
 			continue
 		}
-		specMatches := slp205SpecPathsSpread.FindAllStringIndex(ln.content, -1)
+		specMatches := slp205SpecPathsSpread.FindAllStringIndex(ln.clean, -1)
 		for i := range specMatches {
 			match := specMatches[i]
 			if len(match) < 2 {
@@ -205,13 +208,13 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 			if !ok {
 				continue
 			}
-			depth := ln.depthBase + slp205BraceDepthAt(ln.content, pos)
+			depth := ln.depthBase + slp205BraceDepthAt(ln.clean, pos)
 			candidates = append(candidates, slp205Event{kind: "spec", line: ln, pos: pos, depth: depth})
 			if baseDepth < 0 || depth < baseDepth {
 				baseDepth = depth
 			}
 		}
-		generatedMatches := slp205GeneratedPathsSpread.FindAllStringIndex(ln.content, -1)
+		generatedMatches := slp205GeneratedPathsSpread.FindAllStringIndex(ln.clean, -1)
 		for i := range generatedMatches {
 			match := generatedMatches[i]
 			if len(match) < 2 {
@@ -221,7 +224,7 @@ func slp205MergeEvents(lines []slp205Line) []slp205Event {
 			if !ok {
 				continue
 			}
-			depth := ln.depthBase + slp205BraceDepthAt(ln.content, pos)
+			depth := ln.depthBase + slp205BraceDepthAt(ln.clean, pos)
 			candidates = append(candidates, slp205Event{kind: "generated", line: ln, pos: pos, depth: depth})
 			if baseDepth < 0 || depth < baseDepth {
 				baseDepth = depth
@@ -299,4 +302,95 @@ func slp205BraceDepthAt(content string, offset int) int {
 		}
 	}
 	return depth
+}
+
+func slp205StripJSCommentsOutsideStrings(content string) string {
+	if content == "" {
+		return ""
+	}
+	out := []byte(content)
+	state := slp205StringScanState{}
+	for i := 0; i < len(out); i++ {
+		ch := out[i]
+		// Preserve byte positions by blanking comments after skipping quoted source text.
+		if state.consume(ch) {
+			continue
+		}
+		if slp205StartsComment(out, i, '/') {
+			slp205BlankRange(out, i, len(out))
+			return string(out)
+		}
+		if slp205StartsComment(out, i, '*') {
+			i = slp205BlankBlockComment(out, i)
+		}
+	}
+	return string(out)
+}
+
+type slp205StringScanState struct {
+	quote   byte
+	escaped bool
+}
+
+func (s *slp205StringScanState) consume(ch byte) bool {
+	// Inside a string, comments and braces are source text, not structure.
+	if s.quote != 0 {
+		if s.escaped {
+			s.escaped = false
+			return true
+		}
+		if ch == '\\' {
+			s.escaped = true
+			return true
+		}
+		if ch == s.quote {
+			s.quote = 0
+		}
+		return true
+	}
+	if ch == '\'' || ch == '"' || ch == '`' {
+		s.quote = ch
+		return true
+	}
+	return false
+}
+
+func slp205StartsComment(content []byte, offset int, next byte) bool {
+	if len(content) == 0 || offset < 0 || offset+1 >= len(content) {
+		return false
+	}
+	return content[offset] == '/' && content[offset+1] == next
+}
+
+func slp205BlankBlockComment(content []byte, offset int) int {
+	if len(content) == 0 || !slp205StartsComment(content, offset, '*') {
+		return offset
+	}
+	slp205BlankRange(content, offset, offset+2)
+	i := offset + 2
+	for i < len(content) {
+		if i+1 < len(content) && content[i] == '*' && content[i+1] == '/' {
+			slp205BlankRange(content, i, i+2)
+			return i + 1
+		}
+		content[i] = ' '
+		i++
+	}
+	return len(content) - 1
+}
+
+func slp205BlankRange(content []byte, start, end int) {
+	// Clamp the caller's range so comment blanking preserves the original line length.
+	if len(content) == 0 {
+		return
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end > len(content) {
+		end = len(content)
+	}
+	for i := start; i < end; i++ {
+		content[i] = ' '
+	}
 }

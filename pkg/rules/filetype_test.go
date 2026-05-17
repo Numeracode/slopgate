@@ -3,37 +3,68 @@ package rules
 import "testing"
 
 func TestNormalizedSlashPath(t *testing.T) {
-	if got := normalizedSlashPath(""); got != "" {
-		t.Fatalf("expected empty path to stay empty, got %q", got)
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "windows mixed case", in: `FOO\Bar`, want: "foo/bar"},
+		{name: "openapi path", in: `Docs\Contracts\OpenAPI\Whimsy-API.OpenAPI.JSON`, want: "docs/contracts/openapi/whimsy-api.openapi.json"},
 	}
-	if got := normalizedSlashPath(`Docs\Contracts\OpenAPI\Whimsy-API.OpenAPI.JSON`); got != "docs/contracts/openapi/whimsy-api.openapi.json" {
-		t.Fatalf("unexpected normalized path: %q", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizedSlashPath(tc.in); got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
 	}
 }
 
 func TestGeneratedArtifactPath(t *testing.T) {
-	if isGeneratedArtifactPath("") {
-		t.Fatal("empty path should not be treated as generated")
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "empty", in: "", want: false},
+		{name: "root generated dir", in: "generated/client.ts", want: true},
+		{name: "exact generated dir", in: "generated", want: true},
+		{name: "nested generated dir", in: "packages/sdk/src/generated/operations.ts", want: true},
+		{name: "windows generated dir", in: `Packages\SDK\Generated\client.ts`, want: true},
+		{name: "similar name", in: "generatedx/client.ts", want: false},
+		{name: "different dir", in: "packages/sdk/src/notgenerated/operations.ts", want: false},
 	}
-	if !isGeneratedArtifactPath("packages/sdk/src/generated/operations.ts") {
-		t.Fatal("generated SDK path should be detected")
-	}
-	if isGeneratedArtifactPath("packages/sdk/src/operations.ts") {
-		t.Fatal("non-generated SDK path should not be detected")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGeneratedArtifactPath(tc.in); got != tc.want {
+				t.Fatalf("got %t want %t for %q", got, tc.want, tc.in)
+			}
+		})
 	}
 }
 
 func TestOpenAPIArtifactPath(t *testing.T) {
-	if isOpenAPIArtifactPath("") {
-		t.Fatal("empty path should not be treated as OpenAPI")
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "empty", in: "", want: false},
+		{name: "suffix json", in: "docs/contracts/openapi/whimsy-api.openapi.json", want: true},
+		{name: "suffix yaml", in: "docs/contracts/whimsy-api.openapi.yaml", want: true},
+		{name: "suffix yml", in: "docs/contracts/whimsy-api.openapi.yml", want: true},
+		{name: "root openapi dir", in: "openapi/spec.yaml", want: true},
+		{name: "nested openapi dir", in: "docs/contracts/openapi/spec.yaml", want: true},
+		{name: "windows openapi dir", in: `Docs\Contracts\OpenAPI\spec.json`, want: true},
+		{name: "unrelated extension", in: "openapi/spec.txt", want: false},
+		{name: "plain yaml outside dir", in: "docs/contracts/spec.yaml", want: false},
 	}
-	if !isOpenAPIArtifactPath("docs/contracts/openapi/whimsy-api.openapi.json") {
-		t.Fatal("OpenAPI filename suffix should be detected")
-	}
-	if !isOpenAPIArtifactPath("docs/contracts/openapi/spec.yaml") {
-		t.Fatal("OpenAPI directory should be detected for YAML specs")
-	}
-	if isOpenAPIArtifactPath("docs/contracts/spec.yaml") {
-		t.Fatal("plain YAML outside OpenAPI paths should not be detected")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isOpenAPIArtifactPath(tc.in); got != tc.want {
+				t.Fatalf("got %t want %t for %q", got, tc.want, tc.in)
+			}
+		})
 	}
 }

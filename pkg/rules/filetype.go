@@ -63,7 +63,9 @@ func isGeneratedArtifactPath(path string) bool {
 		return false
 	}
 	lower := normalizedSlashPath(path)
-	return strings.Contains(lower, "/generated/")
+	return lower == "generated" ||
+		strings.HasPrefix(lower, "generated/") ||
+		strings.Contains(lower, "/generated/")
 }
 
 func isOpenAPIArtifactPath(path string) bool {
@@ -79,7 +81,7 @@ func isOpenAPIArtifactPath(path string) bool {
 	if ext != ".json" && ext != ".yaml" && ext != ".yml" {
 		return false
 	}
-	return strings.Contains(lower, "/openapi/")
+	return strings.Contains("/"+lower+"/", "/openapi/")
 }
 
 // isJavaTestFile reports whether path is a Java test file.

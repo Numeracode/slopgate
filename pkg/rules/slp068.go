@@ -59,7 +59,7 @@ func slp068CollapseCandidates(candidates []slp068Candidate) []slp068Candidate {
 	collapsed := append(make([]slp068Candidate, 0, len(candidates)), candidates[:1]...)
 	for _, next := range candidates[1:] {
 		last := &collapsed[len(collapsed)-1]
-		if next.start <= last.end {
+		if next.start < last.end {
 			if next.end > last.end {
 				last.end = next.end
 			}

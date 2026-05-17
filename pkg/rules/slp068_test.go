@@ -158,6 +158,35 @@ func TestSLP068_IgnoresGeneratedArtifacts(t *testing.T) {
 	}
 }
 
+func TestSLP068_IgnoresOpenAPIArtifacts(t *testing.T) {
+	d := parseDiff(t, `diff --git a/openapi/spec.yaml b/openapi/spec.yaml
+--- a/openapi/spec.yaml
++++ b/openapi/spec.yaml
+@@ -1,1 +1,19 @@
+ openapi: 3.1.0
++  const a = one()
++  const b = two()
++  const c = three()
++  const d = four()
++  const e = five()
++  const f = six()
++  const g = seven()
++  const h = eight()
++  const a = one()
++  const b = two()
++  const c = three()
++  const d = four()
++  const e = five()
++  const f = six()
++  const g = seven()
++  const h = eight()
+ `)
+	got := SLP068{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for OpenAPI artifact, got %d: %+v", len(got), got)
+	}
+}
+
 func TestSLP068_Meta(t *testing.T) {
 	r := SLP068{}
 	if r.ID() != "SLP068" {

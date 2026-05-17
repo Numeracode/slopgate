@@ -54,6 +54,11 @@ diff --git a/pkg/rules/slp130_test.go b/pkg/rules/slp130_test.go
 +func TestSLP130_Updated(t *testing.T) {}
 `)
 	filtered := diff.FilterIgnored(d, []string{"pkg/rules/slp*_test.go"})
+	for _, f := range filtered.Files {
+		if f.Path == "pkg/rules/slp130_test.go" {
+			t.Fatalf("expected test file to be removed from scan-visible files, got %+v", filtered.Files)
+		}
+	}
 	got := SLP127{}.Check(filtered)
 	if len(got) != 0 {
 		t.Fatalf("expected 0 findings when ignored test diff still exists in metadata, got %d", len(got))

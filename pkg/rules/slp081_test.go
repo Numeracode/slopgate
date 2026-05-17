@@ -170,3 +170,43 @@ export function Button() {
 		t.Fatalf("expected 0 findings with snapshot file React import, got %d: %+v", len(got), got)
 	}
 }
+
+func TestSLP081_PseudoImportTextDoesNotSuppressFinding(t *testing.T) {
+	tests := []struct {
+		name string
+		diff string
+	}{
+		{
+			name: "comment pseudo import",
+			diff: `diff --git a/test.tsx b/test.tsx
+--- a/test.tsx
++++ b/test.tsx
+@@ -1,2 +1,3 @@
+ // import React from 'react'
++const node = <React.Fragment />
+ const footer = true
+`,
+		},
+		{
+			name: "string literal pseudo import",
+			diff: `diff --git a/test.tsx b/test.tsx
+--- a/test.tsx
++++ b/test.tsx
+@@ -1,2 +1,3 @@
+ const note = "import React from 'react'"
++const node = <React.Fragment />
+ const footer = true
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := parseDiff(t, tt.diff)
+			got := SLP081{}.Check(d)
+			if len(got) != 1 {
+				t.Fatalf("expected 1 finding when only pseudo-import text is present, got %d: %+v", len(got), got)
+			}
+		})
+	}
+}

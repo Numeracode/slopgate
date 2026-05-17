@@ -20,6 +20,7 @@ func (SLP081) Description() string {
 
 var (
 	slp081ReactNamespacePattern = regexp.MustCompile(`\bReact\.`)
+	slp081ReactImportPattern    = regexp.MustCompile(`(?ms)^\s*import\s+(?:type\s+)?(?:[^;]*?\s+from\s+)?["']react["']\s*;?\s*$`)
 )
 
 func (r SLP081) Check(d *diff.Diff) []Finding {
@@ -86,7 +87,5 @@ func (r SLP081) Check(d *diff.Diff) []Finding {
 }
 
 func slp081HasReactImport(content string) bool {
-	content = strings.ToLower(content)
-	return strings.Contains(content, "import") &&
-		(strings.Contains(content, `"react"`) || strings.Contains(content, `'react'`))
+	return slp081ReactImportPattern.MatchString(content)
 }

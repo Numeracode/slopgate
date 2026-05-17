@@ -300,7 +300,7 @@ Detect exact-order assertions on OpenAPI `required` or parameter-name arrays whe
 
 Severity:
 
-- `warn` when the exact-order assertion gates generated OpenAPI output in CI or blocks a changed contract artifact
+- `warn` when the exact-order assertion gates generated OpenAPI output in CI, blocks a changed contract artifact, or is test-only while a production contract artifact changes in the same diff
 - `info` when the exact-order assertion is test-only and no production contract artifact is changed in the same diff
 - no finding when the assertion canonicalizes or sorts values before comparison
 

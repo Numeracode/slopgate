@@ -162,6 +162,8 @@ func Default() *Registry {
 	r.Register(SLP203{})
 	// P1: Close Sentry bug gap — silent promise failure mask.
 	r.Register(SLP204{})
+	// P1: Close Sentry bug gap — OpenAPI path merge-order override.
+	r.Register(SLP205{})
 	// P1: Close Sentry bug gap — transaction missing explicit rollback.
 	r.Register(SLP207{})
 	return r

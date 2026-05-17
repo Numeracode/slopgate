@@ -103,7 +103,7 @@ func slp205CollectObjectBlock(lines []diff.Line, start int) []slp205Line {
 		}
 		content := ln.Content
 		lineDepthBase := depth
-		lineDelta := 0
+		var lineDelta int
 		if !started {
 			open := strings.Index(content, "{")
 			if open < 0 {
@@ -249,10 +249,8 @@ func slp205MatchStart(match []int) (int, bool) {
 	if len(match) < 2 {
 		return 0, false
 	}
-	for i, value := range match {
-		if i == 0 {
-			return value, true
-		}
+	for _, value := range match {
+		return value, true
 	}
 	return 0, false
 }

@@ -308,6 +308,45 @@ func TestSLP100_NoFireOnBlockArrowWithWork(t *testing.T) {
 	}
 }
 
+func TestSLP100_ConsoleExpressionArrowStub(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,2 @@
++const log = () => console.log("todo");
+`)
+	got := SLP100{}.Check(d)
+	if len(got) == 0 {
+		t.Fatal("expected a finding for an arrow whose body is only console.log")
+	}
+}
+
+func TestSLP100_NoFireOnArrowStringReturn(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handler.ts b/handler.ts
+--- a/handler.ts
++++ b/handler.ts
+@@ -1,1 +1,2 @@
++const greet = () => "hello world";
+`)
+	got := SLP100{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for an arrow returning a real string, got %d", len(got))
+	}
+}
+
+func TestSLP100_NoFireOnPythonOneLineStringReturn(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc.py b/svc.py
+--- a/svc.py
++++ b/svc.py
+@@ -1,1 +1,2 @@
++def greeting(): return "hello"
+`)
+	got := SLP100{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for a one-line def returning a real string, got %d", len(got))
+	}
+}
+
 func TestSLP100_PythonOneLineReturnNoneStub(t *testing.T) {
 	d := parseDiff(t, `diff --git a/svc.py b/svc.py
 --- a/svc.py

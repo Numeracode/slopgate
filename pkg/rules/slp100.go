@@ -182,6 +182,41 @@ func slp100Indent(raw string) int {
 	return n
 }
 
+// slp100BodyAfter returns the text following the last top-level
+// occurrence of sep in line — a Python `:` or an arrow `=>` — skipping
+// occurrences inside string literals or brackets. String contents are
+// kept intact so callers can tell a real return value from an empty one.
+func slp100BodyAfter(line, sep string) (string, bool) {
+	var quote byte
+	depth := 0
+	idx := -1
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		if quote != 0 {
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch {
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+		case c == '(' || c == '[' || c == '{':
+			depth++
+		case c == ')' || c == ']' || c == '}':
+			if depth > 0 {
+				depth--
+			}
+		case depth == 0 && strings.HasPrefix(line[i:], sep):
+			idx = i
+		}
+	}
+	if idx < 0 {
+		return "", false
+	}
+	return strings.TrimSpace(line[idx+len(sep):]), true
+}
+
 func (r SLP100) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	for _, f := range d.Files {
@@ -223,13 +258,12 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 
 					// Arrow functions: a single-expression body is judged
 					// immediately, while a block body falls through to the
-					// brace-body scanning below.
-					arrowIdx := strings.Index(cleanContent, "=>")
-					if arrowIdx >= 0 {
-						expr := strings.TrimSpace(cleanContent[arrowIdx+2:])
+					// brace-body scanning below. The expression is taken from
+					// the original line so string contents stay intact.
+					if expr, ok := slp100BodyAfter(content, "=>"); ok {
 						if !strings.HasPrefix(expr, "{") {
-							expr = strings.TrimSuffix(expr, ";")
-							if expr != "" && slp100ZeroReturn.MatchString("return "+expr) {
+							expr = strings.TrimSpace(strings.TrimSuffix(expr, ";"))
+							if expr != "" && (slp100ZeroReturn.MatchString("return "+expr) || slp100ConsoleLogStub.MatchString(expr)) {
 								out = append(out, Finding{
 									RuleID:   r.ID(),
 									Severity: r.DefaultSeverity(),
@@ -246,27 +280,27 @@ func (r SLP100) Check(d *diff.Diff) []Finding {
 
 					// One-line Python def. A body with no side effect — a
 					// pass, a raise, or a zero-value return — is a no-op stub.
-					colonIdx := strings.LastIndex(cleanContent, ":")
-					if colonIdx >= 0 && isPythonFile(f.Path) {
-						afterColon := strings.TrimSpace(cleanContent[colonIdx+1:])
-						if afterColon != "" {
-							if !hasSideEffect(afterColon) {
-								out = append(out, Finding{
-									RuleID:   r.ID(),
-									Severity: r.DefaultSeverity(),
-									File:     f.Path,
-									Line:     funcLineNo,
-									Message:  "function appears to be a no-op stub — implement the body or add a TODO if intentional",
-									Snippet:  funcSnippet,
-								})
+					if isPythonFile(f.Path) {
+						if afterColon, ok := slp100BodyAfter(content, ":"); ok {
+							if afterColon != "" {
+								if !hasSideEffect(afterColon) {
+									out = append(out, Finding{
+										RuleID:   r.ID(),
+										Severity: r.DefaultSeverity(),
+										File:     f.Path,
+										Line:     funcLineNo,
+										Message:  "function appears to be a no-op stub — implement the body or add a TODO if intentional",
+										Snippet:  funcSnippet,
+									})
+								}
+								inFunc = false
+								continue
 							}
-							inFunc = false
+							// Empty after colon — body is on next line(s).
+							isBraceless = true
+							funcIndent = slp100Indent(ln.Content)
 							continue
 						}
-						// Empty after colon — body is on next line(s).
-						isBraceless = true
-						funcIndent = slp100Indent(ln.Content)
-						continue
 					}
 
 					// Check the body fragment on the same line (text after the opening '{').

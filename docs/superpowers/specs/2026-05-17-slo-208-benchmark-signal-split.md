@@ -7,6 +7,63 @@
 **Tracking issue:** `#62`
 **Target repo:** `messagesgoel-blip/slopgate`
 **Primary benchmark window analyzed:** 2026-05-15 09:27 EDT to 2026-05-17 09:27 EDT
+**Benchmark corpus archive:** `/srv/storage/shared/slopgate-benchmarks/`
+**Benchmark generator:** `/srv/storage/repo/slopgate/scripts/benchmark_review.py` at Slopgate commit `1d1a16bbebd61146921a9209716b0aa45592a366`
+
+## Benchmark Corpus Anchor
+
+The historical baseline for this spec is the archived benchmark corpus under
+`/srv/storage/shared/slopgate-benchmarks/`. The generator source was Slopgate
+commit `1d1a16bbebd61146921a9209716b0aa45592a366` with the shared Slopgate
+binary from that commit line, `GH_TOKEN` set, `BENCHMARK_FUZZY_RANGE=2`,
+`SLOPGATE_BIN=/srv/storage/shared/tools/bin/slopgate`, and
+`SLOPGATE_SENTRY_HELPER=/srv/storage/shared/tools/bin/sentry-whimsy`.
+
+Toolchain anchor at spec creation:
+
+- Python `3.12.3`
+- GitHub CLI `2.89.0`
+- Go `1.22.2 linux/arm64`
+- Benchmark wrapper `/srv/storage/shared/agent-toolkit/bin/run-slopgate-benchmark`
+
+The reproducible invocation template is:
+
+```bash
+GH_TOKEN=<github-token> \
+BENCHMARK_FUZZY_RANGE=2 \
+SLOPGATE_BIN=/srv/storage/shared/tools/bin/slopgate \
+SLOPGATE_SENTRY_HELPER=/srv/storage/shared/tools/bin/sentry-whimsy \
+/srv/storage/shared/agent-toolkit/bin/run-slopgate-benchmark \
+  /srv/storage/repo/<target-repo> <pr-number> main \
+  --output /srv/storage/shared/slopgate-benchmarks/<repo>-<pr-number>-prepush.json
+```
+
+Post-merge reruns use the same command and write `*-postmerge.json`.
+
+Primary artifacts in the 48-hour baseline:
+
+- `/srv/storage/shared/slopgate-benchmarks/skillswap-126-postmerge.json`
+- `/srv/storage/shared/slopgate-benchmarks/codero-112-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-602-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-602-postmerge.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-603-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-603-postmerge.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-605-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-605-postmerge.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-606-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-607-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-609-prepush.json`
+- `/srv/storage/shared/slopgate-benchmarks/whimsy-610-prepush.json`
+
+Whimsy validation corpus SHAs:
+
+- Whimsy PR `#602`: base `6fe9c845287777827969d3da81502672bed0c3d6`, head `58a525c368ce2fe97abfd7955425fc2c3c21b8ae`
+- Whimsy PR `#603`: base `a756d007f71f8792d052530019a3d7b30aef8aa4`, head `724714c836bc4dad926f919c1251dd3670a903fe`
+- Whimsy PR `#605`: base `9e314d411ecd4c18ae2a35d2986f94c923fe1f99`, head `834a2e4e3ff11e15ef31665ed142255e5d81b530`
+- Whimsy PR `#606`: base `f5f0103bf1e1ed556f97b4da0dcba34c582c03c1`, head `6d3fe0cfc42ff518d1301484704c44689cd782c8`
+- Whimsy PR `#607`: base `58fcd4ee966c93c6306c4901489eb70a0b48b0c3`, head `cd1142751b7c60996f48cf9f21585912e3633bf9`
+- Whimsy PR `#609`: base `669d0e387c863f5787fbc054b76f64c5e2a96e2b`, head `78b6d8ac08184558832c41e60a2c58eb8a9f2656`
+- Whimsy PR `#610`: base `fdc172d5d30a546418cbc24a760999213421b434`, head `f523c82b9b620b82f4da978954fd5260ec67501a`
 
 ## Problem
 
@@ -30,7 +87,7 @@ Weighted performance in this window:
 - Actionable-plus-Sentry coverage: `1 / 19 = 5.3%`
 - All-comment precision proxy: `3 / 1256 = 0.24%`
 
-Whimsy drives nearly all of the problem:
+Whimsy drives nearly the entire problem:
 
 - 10 of the 12 runs were Whimsy
 - Those 10 runs produced 1,199 Slopgate findings
@@ -48,7 +105,7 @@ The benchmark script also caps `sg_only_details`, `review_only_details`, and `ov
 ## Goals
 
 1. Make the benchmark scoreboard reflect high-signal rule performance instead of style/advisory noise.
-2. Reduce Whimsy benchmark spam from a small number of noisy rules.
+2. Reduce Whimsy benchmark spam from a few noisy rules.
 3. Preserve real blocker coverage from rules such as `SLP095`, `SLP098`, `SLP102`, `SLP113`, and `SLP118`.
 4. Add a small first wave of semantic rules for contract and behavior drift exposed by Whimsy misses.
 
@@ -225,7 +282,9 @@ Detect diffs where a client or SDK function changes from returning unwrapped dat
 
 Severity:
 
-- `block` or `warn` depending on confidence
+- `block` when the producer return shape changes and an in-scope consumer or test still reads the previous shape
+- `warn` when the producer return shape changes but the diff lacks enough consumer context to prove breakage
+- no finding when the same diff updates all visible consumers to the new shape
 
 #### New rule: OpenAPI merge-order override hazard
 
@@ -241,7 +300,9 @@ Detect exact-order assertions on OpenAPI `required` or parameter-name arrays whe
 
 Severity:
 
-- `info` or `warn`
+- `warn` when the exact-order assertion gates generated OpenAPI output in CI or blocks a changed contract artifact
+- `info` when the exact-order assertion is test-only and no production contract artifact is changed in the same diff
+- no finding when the assertion canonicalizes or sorts values before comparison
 
 ## File Changes
 
@@ -288,8 +349,10 @@ Validation must include:
 
 1. Unit tests for all touched rules
 2. Regression tests for benchmark scoring modes
-3. Re-run benchmark archive comparisons against the recent Whimsy corpus:
+3. Re-run benchmark archive comparisons using the Benchmark Corpus Anchor above against the recent Whimsy corpus:
    - PRs `#602`, `#603`, `#605`, `#606`, `#607`, `#609`, `#610`
+   - Artifact paths `whimsy-602-prepush.json`, `whimsy-603-prepush.json`, `whimsy-605-prepush.json`, `whimsy-606-prepush.json`, `whimsy-607-prepush.json`, `whimsy-609-prepush.json`, and `whimsy-610-prepush.json`
+   - Base/head SHAs listed in the Whimsy validation corpus SHAs section
 4. Report before/after on:
    - total findings
    - `block_warn_only` findings
@@ -298,11 +361,11 @@ Validation must include:
 
 ## Acceptance Criteria
 
-The arc is complete when all of the following are true:
+The arc is complete when the following are true:
 
 - Benchmark output reports `all_rules`, `block_warn_only`, and `benchmark_eligible` metrics
 - `SLP035`, `SLP053`, and `SLP017` no longer distort the main parity score
-- `SLP068` visible noise drops materially on the recent Whimsy corpus
+- `SLP068` visible noise is reduced by at least 70% on the specified Whimsy corpus
 - `SLP056` no longer flags the observed generated OpenAPI artifact cases
 - `SLP033` and `SLP081` no longer produce the observed modern-React false positives
 - At least one Whimsy-exposed semantic gap has a new targeted rule with tests

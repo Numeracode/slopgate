@@ -74,10 +74,13 @@ func slp068CollapseCandidates(candidates []slp068Candidate) []slp068Candidate {
 func (r SLP068) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	for _, f := range d.Files {
-		if f.IsDelete || isDocFile(f.Path) || !isSourceLikeFile(f.Path) {
+		if f.IsDelete || isDocFile(f.Path) {
 			continue
 		}
 		if isTestFile(f.Path) || isGeneratedArtifactPath(f.Path) || isOpenAPIArtifactPath(f.Path) {
+			continue
+		}
+		if !isSourceLikeFile(f.Path) {
 			continue
 		}
 		added := f.AddedLines()

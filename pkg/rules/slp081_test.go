@@ -74,6 +74,38 @@ index 123..456 100644
 			expected: 0,
 		},
 		{
+			name: "tsx with default React import and trailing comment is ok",
+			diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 123..456 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,6 @@
++import React from 'react' // temporary
+ const Button = () => {
+-  return <>Click me</>
++  return <React.Fragment>Click me</React.Fragment>
+ }
+ export default Button
+`,
+			expected: 0,
+		},
+		{
+			name: "tsx with namespace React import and trailing comment is ok",
+			diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index 123..456 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,6 @@
++import * as React from 'react' // @ts-ignore
+ const Button = () => {
+-  return <>Click me</>
++  return <React.Fragment>Click me</React.Fragment>
+ }
+ export default Button
+`,
+			expected: 0,
+		},
+		{
 			name: "tsx with type-only React import still fires on React namespace usage",
 			diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
 index 123..456 100644

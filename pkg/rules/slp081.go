@@ -43,14 +43,18 @@ func (r SLP081) Check(d *diff.Diff) []Finding {
 					continue
 				}
 
-				content := strings.ToLower(ln.Content)
-				if strings.Contains(content, "import") && (strings.Contains(content, `"react"`) || strings.Contains(content, `'react'`)) {
+				if slp081HasReactImport(ln.Content) {
 					hasReactImport = true
 					break
 				}
 			}
 			if hasReactImport {
 				break
+			}
+		}
+		if !hasReactImport {
+			if content, ok := slp007FileContent(d, f.Path); ok && slp081HasReactImport(content) {
+				hasReactImport = true
 			}
 		}
 
@@ -79,4 +83,10 @@ func (r SLP081) Check(d *diff.Diff) []Finding {
 	nextFile:
 	}
 	return out
+}
+
+func slp081HasReactImport(content string) bool {
+	content = strings.ToLower(content)
+	return strings.Contains(content, "import") &&
+		(strings.Contains(content, `"react"`) || strings.Contains(content, `'react'`))
 }

@@ -39,6 +39,7 @@ var slp033ReactHooks = []string{
 
 // slp033NamespaceImport matches namespace imports like "import * as React from 'react'".
 var slp033NamespaceImport = regexp.MustCompile(`(?i)import\s+(?:type\s+)?\*\s+as\s+(\w+)\s+from\s+["']`)
+var slp033SideEffectImport = regexp.MustCompile(`(?i)^import\s+["'][^"']+["']\s*;?$`)
 
 func (r SLP033) Check(d *diff.Diff) []Finding {
 	var out []Finding
@@ -160,7 +161,7 @@ func slp033CollectImportedItemsFromLines(lines []string, importedItems map[strin
 			}
 			currentImport.Reset()
 			currentImport.WriteString(content)
-			collecting = !strings.Contains(strings.ToLower(content), " from ")
+			collecting = slp033ImportNeedsMoreLines(currentImport.String())
 			if !collecting {
 				slp033RecordImportItems(currentImport.String(), importedItems)
 			}
@@ -169,12 +170,25 @@ func slp033CollectImportedItemsFromLines(lines []string, importedItems map[strin
 
 		currentImport.WriteByte(' ')
 		currentImport.WriteString(content)
-		if strings.Contains(strings.ToLower(currentImport.String()), " from ") {
+		if !slp033ImportNeedsMoreLines(currentImport.String()) {
 			slp033RecordImportItems(currentImport.String(), importedItems)
 			currentImport.Reset()
 			collecting = false
 		}
 	}
+}
+
+func slp033ImportNeedsMoreLines(statement string) bool {
+	statement = strings.TrimSpace(statement)
+	if statement == "" {
+		return false
+	}
+
+	if slp033SideEffectImport.MatchString(statement) {
+		return false
+	}
+
+	return !strings.Contains(strings.ToLower(statement), " from ")
 }
 
 func slp033RecordImportItems(statement string, importedItems map[string]bool) {

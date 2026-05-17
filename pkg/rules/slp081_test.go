@@ -1,6 +1,10 @@
 package rules
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestSLP081(t *testing.T) {
 	tests := []struct {
@@ -129,5 +133,40 @@ index 123..456 100644
 				t.Errorf("line %q: expected React namespace finding=%v, got %v", tt.line, tt.expected, hasFinding)
 			}
 		})
+	}
+}
+
+func TestSLP081_FallsBackToSnapshotFileImportsOutsideHunk(t *testing.T) {
+	root := t.TempDir()
+	filePath := filepath.Join(root, "src/components")
+	if err := os.MkdirAll(filePath, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	content := `import React from "react";
+
+export function Button() {
+  return <React.Fragment>Click me</React.Fragment>;
+}
+`
+	target := filepath.Join(filePath, "Button.tsx")
+	if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	d := parseDiffWithRoot(t, root, `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -2,2 +2,5 @@
+ export function Button() {
+-  return <React.Fragment>Click me</React.Fragment>;
++  const className = "btn";
++  return <React.Fragment>{className}</React.Fragment>;
++}
+`)
+
+	got := SLP081{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings with snapshot file React import, got %d: %+v", len(got), got)
 	}
 }

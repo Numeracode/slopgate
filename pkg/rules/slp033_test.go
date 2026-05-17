@@ -200,10 +200,27 @@ func TestSLP033_MultilineTypeImportAndAliasAvoidFalsePositive(t *testing.T) {
 	}
 }
 
+func TestSLP033_SideEffectImportDoesNotHideReactImport(t *testing.T) {
+	d := parseDiff(t, `diff --git a/app/src/components/docs/MDXProvider.tsx b/app/src/components/docs/MDXProvider.tsx
+--- a/app/src/components/docs/MDXProvider.tsx
++++ b/app/src/components/docs/MDXProvider.tsx
+@@ -1,2 +1,4 @@
++import "./polyfills";
++import type { ReactNode } from "react";
+ 
++type ProviderProps = { children: ReactNode }
+`)
+
+	got := SLP033{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings with side-effect import before React import, got %d: %+v", len(got), got)
+	}
+}
+
 func TestSLP033_FallsBackToSnapshotFileImportsOutsideHunk(t *testing.T) {
 	root := t.TempDir()
 	filePath := filepath.Join(root, "app/src/components/docs")
-	if err := os.MkdirAll(filePath, 0o755); err != nil {
+	if err := os.MkdirAll(filePath, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
@@ -215,7 +232,7 @@ function Callout({ children }: { children?: ReactNode }) {
 }
 `
 	target := filepath.Join(filePath, "MDXProvider.tsx")
-	if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 

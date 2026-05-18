@@ -59,6 +59,8 @@ var slp017CamelIdentifierBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 
 var slp017IdentifierSeparators = strings.NewReplacer("_", " ", "-", " ")
 
+const slp017NumberContextBoundaries = ";,{}\n"
+
 // slp017MeasurementContext matches descriptive size/duration/validation fields.
 // These literals are usually schema bounds, UI geometry, or timing knobs already
 // covered better by more specific rules than generic magic-number detection.
@@ -173,9 +175,7 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 			isHTTPContext := slp017HTTPStatusContext.MatchString(clean)
 			// Check for limit/batch context — exempt common limits.
 			isLimitContext := slp017LimitContext.MatchString(clean)
-			// Keep SLP017 focused on public API/config/business values instead
-			// of local implementation arithmetic.
-			isBusinessContext := slp017HasBusinessContext(f.Path, clean)
+			businessContextLine := clean
 			// Mask measurement context tokens and their associated numbers
 			// so unrelated literals on the same line are still checked.
 			clean = slp017MaskMeasurementContexts(clean)
@@ -230,7 +230,7 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 				if isLimitContext && slp017CommonLimit.MatchString(num) {
 					continue
 				}
-				if !isBusinessContext {
+				if !slp017HasBusinessContextForNumber(f.Path, businessContextLine, m[2], m[3]) {
 					continue
 				}
 				out = append(out, Finding{
@@ -252,6 +252,27 @@ func slp017HasBusinessContext(filePath, content string) bool {
 	normalized := slp017CamelIdentifierBoundary.ReplaceAllString(content, "$1 $2")
 	normalized = slp017IdentifierSeparators.Replace(normalized)
 	return slp017BusinessContext.MatchString(normalized) || slp017BusinessPathContext.MatchString(filePath)
+}
+
+func slp017HasBusinessContextForNumber(filePath, content string, start, end int) bool {
+	if slp017BusinessPathContext.MatchString(filePath) {
+		return true
+	}
+	if start < 0 || end < start || end > len(content) {
+		return false
+	}
+
+	contextStart := strings.LastIndexAny(content[:start], slp017NumberContextBoundaries)
+	if contextStart < 0 {
+		contextStart = 0
+	} else {
+		contextStart++
+	}
+	contextEnd := len(content)
+	if relEnd := strings.IndexAny(content[end:], slp017NumberContextBoundaries); relEnd >= 0 {
+		contextEnd = end + relEnd
+	}
+	return slp017HasBusinessContext("", content[contextStart:contextEnd])
 }
 
 // findMatchingParen returns the index of the ')' that matches the '(' at openParenPos.

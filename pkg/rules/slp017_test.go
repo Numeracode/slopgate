@@ -336,6 +336,22 @@ func TestSLP017_IDAndDescription(t *testing.T) {
 	}
 }
 
+func TestSLP017MixedLineUsesTokenContext(t *testing.T) {
+	d := parseDiff(t, `diff --git a/pricing.ts b/pricing.ts
+--- a/pricing.ts
++++ b/pricing.ts
+@@ -1,2 +1,3 @@
++const local = amount * 9; const taxRate = 7
+`)
+	got := (SLP017{}).Check(d)
+	if len(got) != 1 {
+		t.Fatalf("got %d findings, want 1; findings: %v", len(got), got)
+	}
+	if !strings.Contains(got[0].Message, "magic number 7") {
+		t.Fatalf("got finding %q, want taxRate literal 7", got[0].Message)
+	}
+}
+
 func TestSLP017BusinessContext(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -368,9 +384,21 @@ func TestSLP017BusinessContext(t *testing.T) {
 			want:    true,
 		},
 		{
+			name:    "business keyword filename",
+			path:    "src/app.config.ts",
+			content: "export const value = 7",
+			want:    true,
+		},
+		{
 			name:    "config directory path",
 			path:    "config/pricing.ts",
 			content: "export const value = 7",
+			want:    true,
+		},
+		{
+			name:    "settings directory path",
+			path:    "settings/database.py",
+			content: "value = 7",
 			want:    true,
 		},
 		{
@@ -383,6 +411,12 @@ func TestSLP017BusinessContext(t *testing.T) {
 			name:    "plain local arithmetic",
 			path:    "src/main.go",
 			content: "return x * 7",
+			want:    false,
+		},
+		{
+			name:    "utility file non business content",
+			path:    "src/utils.ts",
+			content: "const local = amount * 9",
 			want:    false,
 		},
 	}

@@ -164,6 +164,33 @@ class BenchmarkRuleScorecardTest(unittest.TestCase):
         self.assertEqual(only_pr_row["actionable_overlap"], "yes")
         self.assertEqual(only_rule_row["actionable_overlaps"], 1)
 
+    def test_review_miss_row_accepts_file_key(self) -> None:
+        row = scorecard.review_miss_row(
+            "messagesgoel-blip/demo",
+            12,
+            "postmerge",
+            "demo-12-postmerge.json",
+            "coderabbit_all",
+            {"file": "review.go", "line": None, "body": "missed issue", "id": 7},
+        )
+
+        self.assertEqual(row["file"], "review.go")
+        self.assertEqual(row["line"], 0)
+
+    def test_main_returns_error_when_benchmark_dir_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing"
+            original_argv = sys.argv
+            try:
+                sys.argv = [
+                    "benchmark-rule-scorecard.py",
+                    "--benchmark-dir",
+                    str(missing),
+                ]
+                self.assertEqual(scorecard.main(), 1)
+            finally:
+                sys.argv = original_argv
+
     def write_benchmark(self, path: Path, *, pr: int, phase_note: str) -> None:
         path.write_text(json.dumps({
             "repo": "messagesgoel-blip/demo",

@@ -10,6 +10,7 @@ in the default gate, move to advisory/quarantine, or be disabled.
 import argparse
 import csv
 import json
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -224,6 +225,7 @@ def update_rule_stats(stats: dict[str, Any], row: dict[str, Any], seen_rule_in_p
 
 
 def review_miss_row(repo: str, pr: int, phase: str, source: str, stream: str, item: dict[str, Any]) -> dict[str, Any]:
+    file_path = str(item.get("file") or item.get("path") or "")
     line = parse_int(item.get("line"))
     return {
         "repo": repo,
@@ -231,7 +233,7 @@ def review_miss_row(repo: str, pr: int, phase: str, source: str, stream: str, it
         "phase": phase,
         "artifact": source,
         "stream": stream,
-        "file": str(item.get("path", "")),
+        "file": file_path,
         "line": line,
         "summary": str(item.get("body", "")),
         "id": str(item.get("id", "")),
@@ -342,6 +344,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not args.benchmark_dir.is_dir():
+        print(f"Benchmark directory not found: {args.benchmark_dir}", file=sys.stderr)
+        return 1
     sample = collect_sample(args.benchmark_dir, repos=set(args.repo), prs=set(args.pr), limit=args.limit)
     rule_rows, pr_rows, review_rows = build_rows(sample)
     markdown = format_markdown(sample, rule_rows, review_rows)

@@ -175,10 +175,10 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 			isHTTPContext := slp017HTTPStatusContext.MatchString(clean)
 			// Check for limit/batch context — exempt common limits.
 			isLimitContext := slp017LimitContext.MatchString(clean)
-			businessContextLine := clean
 			// Mask measurement context tokens and their associated numbers
 			// so unrelated literals on the same line are still checked.
 			clean = slp017MaskMeasurementContexts(clean)
+			businessContextLine := clean
 
 			for _, m := range slp017Number.FindAllStringSubmatchIndex(clean, -1) {
 				if len(m) < 2 {

@@ -287,6 +287,16 @@ func TestSLP017_MagicNumber(t *testing.T) {
 			want: 0,
 		},
 		{
+			name: "measurement keyword does not make unrelated arithmetic business context",
+			diff: `diff --git a/api.ts b/api.ts
+--- a/api.ts
++++ b/api.ts
+@@ -1,2 +1,3 @@
++const local = timeoutMs * 37
+`,
+			want: 0,
+		},
+		{
 			name: "non-standard number still flagged",
 			diff: `diff --git a/tax.js b/tax.js
 --- a/tax.js

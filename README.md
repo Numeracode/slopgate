@@ -137,7 +137,7 @@ scripts/benchmark-rule-scorecard.py --limit 20 \
   --output-dir /srv/storage/shared/slopgate-benchmarks/pruning-scorecard
 ```
 
-This writes `rule_scorecard.csv`, `pr_findings.csv`, `review_misses.csv`, and `pruning_candidates.md`. Review the CSV `manual_decision` fields with `keep`, `quarantine`, `disable`, or `delete`.
+This writes `rule_scorecard.csv`, `pr_findings.csv`, `review_misses.csv`, and `pruning_candidates.md`. Review `rule_scorecard.csv` and set `manual_decision` consistently with scorecard outcomes such as `keep`, `watch`, `quarantine`, `disable_candidate`, or `review`.
 
 To verify recent merged PRs are represented in the benchmark archive:
 

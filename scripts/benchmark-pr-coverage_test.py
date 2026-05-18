@@ -43,6 +43,34 @@ class BenchmarkPRCoverageTest(unittest.TestCase):
 
             self.assertEqual([path.name for path in matches], ["slopgate-75-postmerge.json"])
 
+    def test_format_table_escapes_markdown_cells(self) -> None:
+        output = coverage.format_table([
+            {
+                "number": 1,
+                "mergedAt": "2026-05-18T00:00:00Z",
+                "status": "tracked",
+                "artifacts": [],
+                "title": "pipe | title\nnext line",
+            }
+        ])
+
+        self.assertIn("pipe \\| title<br>next line", output)
+
+    def test_main_returns_error_when_benchmark_dir_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing"
+            original_argv = sys.argv
+            try:
+                sys.argv = [
+                    "benchmark-pr-coverage.py",
+                    "messagesgoel-blip/slopgate",
+                    "--benchmark-dir",
+                    str(missing),
+                ]
+                self.assertEqual(coverage.main(), 2)
+            finally:
+                sys.argv = original_argv
+
 
 if __name__ == "__main__":
     unittest.main()

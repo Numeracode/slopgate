@@ -45,6 +45,13 @@ class BenchmarkRuleScorecardTest(unittest.TestCase):
                             "rule_id": "SLP043",
                             "severity": "warn",
                             "message": "duplicate key field",
+                        },
+                        {
+                            "file": "b.go",
+                            "line": 5,
+                            "rule_id": "SLP205",
+                            "severity": "warn",
+                            "message": "colliding slopgate-only row",
                         }
                     ],
                     "overlap_details": [
@@ -78,7 +85,43 @@ class BenchmarkRuleScorecardTest(unittest.TestCase):
         self.assertEqual(by_rule["SLP205"]["actionable_overlaps"], 1)
         self.assertEqual(by_rule["SLP205"]["suggested_action"], "keep")
         self.assertEqual(by_rule["SLP043"]["slopgate_only"], 1)
-        self.assertEqual(len(pr_rows), 2)
+        self.assertEqual(by_rule["SLP205"]["slopgate_only"], 1)
+        self.assertEqual(len(pr_rows), 3)
+
+    def test_malformed_line_and_pr_values_do_not_abort_scorecard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bench_dir = Path(tmp)
+            (bench_dir / "demo-bad-postmerge.json").write_text(json.dumps({
+                "repo": "messagesgoel-blip/demo",
+                "pr": "not-a-number",
+                "slopgate": {"total": 0},
+            }))
+            (bench_dir / "demo-10-postmerge.json").write_text(json.dumps({
+                "repo": "messagesgoel-blip/demo",
+                "pr": 10,
+                "slopgate": {"total": 1},
+                "comparison_streams": {
+                    "coderabbit_all": {
+                        "sg_only_details": [
+                            {
+                                "file": "a.go",
+                                "line": None,
+                                "rule_id": "SLP001",
+                                "severity": "warn",
+                                "message": "sample",
+                            }
+                        ],
+                        "review_only_details": [],
+                    }
+                },
+            }))
+
+            sample = scorecard.collect_sample(bench_dir, repos={"demo"}, prs=set(), limit=20)
+            _rule_rows, pr_rows, _review_rows = scorecard.build_rows(sample)
+
+            self.assertEqual([row["pr"] for row in pr_rows], [10])
+            only_row = next(iter(pr_rows))
+            self.assertEqual(only_row["line"], 0)
 
     def write_benchmark(self, path: Path, *, pr: int, phase_note: str) -> None:
         path.write_text(json.dumps({

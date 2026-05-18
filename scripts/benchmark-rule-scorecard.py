@@ -54,6 +54,13 @@ def repo_matches(repo_value: str, filters: set[str]) -> bool:
     return repo_value in filters or short in filters
 
 
+def parse_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value or default)
+    except (TypeError, ValueError):
+        return default
+
+
 def collect_sample(
     benchmark_dir: Path,
     *,
@@ -67,7 +74,9 @@ def collect_sample(
         if data is None:
             continue
         repo = str(data.get("repo", ""))
-        pr = int(data.get("pr", 0))
+        pr = parse_int(data.get("pr"), -1)
+        if pr < 0:
+            continue
         if not repo_matches(repo, repos):
             continue
         if prs and pr not in prs:
@@ -133,8 +142,10 @@ def build_rows(sample: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list
             for item in stream_details(data, "actionable_plus_sentry", "overlap_details")
         }
         for row in pr_rows:
-            key = (row["file"], int(row["line"] or 0), row["rule_id"])
+            key = (row["file"], parse_int(row["line"]), row["rule_id"])
             if row["repo"] == repo and int(row["pr"]) == pr and key in actionable_rules:
+                if row["match_status"] != "overlap":
+                    continue
                 row["actionable_overlap"] = "yes"
                 rule_stats[row["rule_id"]]["actionable_overlaps"] += 1
 
@@ -171,6 +182,7 @@ def finding_row(
     review_summary: str,
 ) -> dict[str, Any]:
     file_path = str(item.get("file") or item.get("path") or "")
+    line = parse_int(item.get("line"))
     return {
         "repo": repo,
         "pr": pr,
@@ -179,7 +191,7 @@ def finding_row(
         "rule_id": str(item.get("rule_id", "?")),
         "severity": str(item.get("severity", "")),
         "file": file_path,
-        "line": int(item.get("line", 0) or 0),
+        "line": line,
         "message": str(item.get("message", "")),
         "match_status": status,
         "review_source": review_source,
@@ -208,6 +220,7 @@ def update_rule_stats(stats: dict[str, Any], row: dict[str, Any], seen_rule_in_p
 
 
 def review_miss_row(repo: str, pr: int, phase: str, source: str, stream: str, item: dict[str, Any]) -> dict[str, Any]:
+    line = parse_int(item.get("line"))
     return {
         "repo": repo,
         "pr": pr,
@@ -215,7 +228,7 @@ def review_miss_row(repo: str, pr: int, phase: str, source: str, stream: str, it
         "artifact": source,
         "stream": stream,
         "file": str(item.get("path", "")),
-        "line": int(item.get("line", 0) or 0),
+        "line": line,
         "summary": str(item.get("body", "")),
         "id": str(item.get("id", "")),
         "manual_family": "",

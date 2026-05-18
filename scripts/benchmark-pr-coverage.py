@@ -9,6 +9,7 @@ from pathlib import Path
 
 BENCHMARK_DIR = Path("/srv/storage/shared/slopgate-benchmarks")
 DEFAULT_PHASES = ("postmerge", "prepush", "precommit")
+GH_PR_LIST_TIMEOUT_SECONDS = 30
 
 
 def run_gh_pr_list(repo: str, limit: int) -> list[dict[str, str]]:
@@ -25,7 +26,12 @@ def run_gh_pr_list(repo: str, limit: int) -> list[dict[str, str]]:
         "--json",
         "number,title,mergedAt,url",
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=GH_PR_LIST_TIMEOUT_SECONDS)
+    except FileNotFoundError as exc:
+        raise RuntimeError("GitHub CLI `gh` is not installed or not in PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("gh pr list timed out after 30 seconds") from exc
     if proc.returncode != 0:
         raise RuntimeError(f"gh pr list failed: {proc.stderr.strip()}")
     return json.loads(proc.stdout)
@@ -47,12 +53,15 @@ def find_artifacts(benchmark_dir: Path, prefix: str, pr_number: int, phases: tup
 
 
 def format_table(rows: list[dict[str, object]]) -> str:
+    def markdown_cell(value: object) -> str:
+        return str(value).strip().replace("|", r"\|").replace("\n", "<br>")
+
     lines = ["| PR | Merged | Benchmark | Artifacts | Title |", "|---:|---|---|---|---|"]
     for row in rows:
         artifacts = "<br>".join(f"`{Path(str(path)).name}`" for path in row["artifacts"])
         lines.append(
-            f"| #{row['number']} | {row['mergedAt']} | {row['status']} | "
-            f"{artifacts or '-'} | {row['title']} |"
+            f"| #{markdown_cell(row['number'])} | {markdown_cell(row['mergedAt'])} | "
+            f"{markdown_cell(row['status'])} | {artifacts or '-'} | {markdown_cell(row['title'])} |"
         )
     return "\n".join(lines)
 
@@ -71,6 +80,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not args.benchmark_dir.is_dir():
+        print(f"Benchmark directory not found: {args.benchmark_dir}", file=sys.stderr)
+        return 2
     prefix = artifact_prefix(args.repo, args.artifact_prefix)
     phases = tuple(args.phase) if args.phase else DEFAULT_PHASES
     prs = [pr for pr in run_gh_pr_list(args.repo, args.limit) if int(pr["number"]) >= args.min_pr]

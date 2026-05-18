@@ -12,7 +12,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 		want int
 	}{
 		{
-			name: "magic number flagged",
+			name: "local arithmetic not flagged",
 			diff: `diff --git a/main.go b/main.go
 --- a/main.go
 +++ b/main.go
@@ -21,7 +21,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 -	return 0
 +	return x * 7
  }`,
-			want: 1,
+			want: 0,
 		},
 		{
 			name: "0 not flagged",
@@ -154,7 +154,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 			want: 0,
 		},
 		{
-			name: "python magic number flagged",
+			name: "python local arithmetic not flagged",
 			diff: `diff --git a/main.py b/main.py
 --- a/main.py
 +++ b/main.py
@@ -163,7 +163,7 @@ func TestSLP017_MagicNumber(t *testing.T) {
 -    pass
 +    return x * 7
  }`,
-			want: 1,
+			want: 0,
 		},
 		{
 			name: "python define not flagged",
@@ -178,15 +178,25 @@ func TestSLP017_MagicNumber(t *testing.T) {
 			want: 0,
 		},
 		{
-			name: "float literal flagged",
-			diff: `diff --git a/main.go b/main.go
---- a/main.go
-+++ b/main.go
+			name: "business float literal flagged",
+			diff: `diff --git a/pricing.go b/pricing.go
+--- a/pricing.go
++++ b/pricing.go
 @@ -1,3 +1,4 @@
- func calc() float64 {
+ func calcFee() float64 {
 -	return 0.0
-+	return 3.14
++	return fee * 3.14
  }`,
+			want: 1,
+		},
+		{
+			name: "config path literal flagged",
+			diff: `diff --git a/config/pricing.ts b/config/pricing.ts
+--- a/config/pricing.ts
++++ b/config/pricing.ts
+@@ -1,2 +1,3 @@
++export const pricingBucket = 7
+`,
 			want: 1,
 		},
 		{
@@ -277,6 +287,16 @@ func TestSLP017_MagicNumber(t *testing.T) {
 			want: 0,
 		},
 		{
+			name: "measurement keyword does not make unrelated arithmetic business context",
+			diff: `diff --git a/api.ts b/api.ts
+--- a/api.ts
++++ b/api.ts
+@@ -1,2 +1,3 @@
++const local = timeoutMs * 37
+`,
+			want: 0,
+		},
+		{
 			name: "non-standard number still flagged",
 			diff: `diff --git a/tax.js b/tax.js
 --- a/tax.js
@@ -323,5 +343,99 @@ func TestSLP017_IDAndDescription(t *testing.T) {
 	}
 	if !strings.Contains(r.Description(), "constant") {
 		t.Errorf("Description() should mention constant: %q", r.Description())
+	}
+}
+
+func TestSLP017MixedLineUsesTokenContext(t *testing.T) {
+	d := parseDiff(t, `diff --git a/pricing.ts b/pricing.ts
+--- a/pricing.ts
++++ b/pricing.ts
+@@ -1,2 +1,3 @@
++const local = amount * 9; const taxRate = 7
+`)
+	got := (SLP017{}).Check(d)
+	if len(got) != 1 {
+		t.Fatalf("got %d findings, want 1; findings: %v", len(got), got)
+	}
+	if !strings.Contains(got[0].Message, "magic number 7") {
+		t.Fatalf("got finding %q, want taxRate literal 7", got[0].Message)
+	}
+}
+
+func TestSLP017BusinessContext(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "camel case business identifier",
+			path:    "src/pricing.ts",
+			content: "const taxRate = 86.9",
+			want:    true,
+		},
+		{
+			name:    "snake case business identifier",
+			path:    "src/pricing.ts",
+			content: "const fee_rate = 3.14",
+			want:    true,
+		},
+		{
+			name:    "camel case page size identifier",
+			path:    "src/pagination.ts",
+			content: "const pageSize = 37",
+			want:    true,
+		},
+		{
+			name:    "snake case page size identifier",
+			path:    "src/pagination.py",
+			content: "page_size = 37",
+			want:    true,
+		},
+		{
+			name:    "business keyword filename",
+			path:    "src/app.config.ts",
+			content: "export const value = 7",
+			want:    true,
+		},
+		{
+			name:    "config directory path",
+			path:    "config/pricing.ts",
+			content: "export const value = 7",
+			want:    true,
+		},
+		{
+			name:    "settings directory path",
+			path:    "settings/database.py",
+			content: "value = 7",
+			want:    true,
+		},
+		{
+			name:    "config txt filename is not path context",
+			path:    "config.txt",
+			content: "value = 7",
+			want:    false,
+		},
+		{
+			name:    "plain local arithmetic",
+			path:    "src/main.go",
+			content: "return x * 7",
+			want:    false,
+		},
+		{
+			name:    "utility file non business content",
+			path:    "src/utils.ts",
+			content: "const local = amount * 9",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := slp017HasBusinessContext(tt.path, tt.content); got != tt.want {
+				t.Fatalf("slp017HasBusinessContext() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

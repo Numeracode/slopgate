@@ -51,7 +51,7 @@ var slp017LimitContext = regexp.MustCompile(`(?i)LIMIT\s+\d|limit\s*[=:]\s*\d|pa
 
 // slp017BusinessContext narrows SLP017 to literals that look like public API,
 // configuration, or business-domain values rather than incidental arithmetic.
-var slp017BusinessContext = regexp.MustCompile(`(?i)\b(?:rate|ratio|percent|percentage|threshold|quota|budget|score|weight|multiplier|factor|tax|fee|price|discount|sampling|sample|rollout|retention|version|policy|config|setting|limit|maximum|minimum|timeout|ttl|retry|interval|batch|pageSize|page_size|capacity|concurrency|port)\b`)
+var slp017BusinessContext = regexp.MustCompile(`(?i)\b(?:rate|ratio|percent|percentage|threshold|quota|budget|score|weight|multiplier|factor|tax|fee|price|discount|sampling|sample|rollout|retention|version|policy|config|setting|limit|maximum|minimum|timeout|ttl|retry|interval|batch|page\s*size|capacity|concurrency|port)\b`)
 
 var slp017BusinessPathContext = regexp.MustCompile(`(?i)(?:^|/)(?:config|configs|settings|constants|env|policy|policies)/|(?:^|/)[^/]*(?:config|settings|constants|policy)[^/]*\.(?:go|ts|tsx|js|jsx|py|java|rs)$`)
 

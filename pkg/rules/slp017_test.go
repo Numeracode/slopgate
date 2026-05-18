@@ -356,6 +356,18 @@ func TestSLP017BusinessContext(t *testing.T) {
 			want:    true,
 		},
 		{
+			name:    "camel case page size identifier",
+			path:    "src/pagination.ts",
+			content: "const pageSize = 37",
+			want:    true,
+		},
+		{
+			name:    "snake case page size identifier",
+			path:    "src/pagination.py",
+			content: "page_size = 37",
+			want:    true,
+		},
+		{
 			name:    "config directory path",
 			path:    "config/pricing.ts",
 			content: "export const value = 7",

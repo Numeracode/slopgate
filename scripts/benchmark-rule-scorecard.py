@@ -138,7 +138,11 @@ def build_rows(sample: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list
             update_rule_stats(rule_stats[rule_id], row, seen_rule_in_pr)
 
         actionable_rules = {
-            (str(item.get("file", "")), int(item.get("line", 0)), str(item.get("rule_id", "?")))
+            (
+                str(item.get("file") or item.get("path") or ""),
+                parse_int(item.get("line")),
+                str(item.get("rule_id", "?")),
+            )
             for item in stream_details(data, "actionable_plus_sentry", "overlap_details")
         }
         for row in pr_rows:

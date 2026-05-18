@@ -123,6 +123,47 @@ class BenchmarkRuleScorecardTest(unittest.TestCase):
             only_row = next(iter(pr_rows))
             self.assertEqual(only_row["line"], 0)
 
+    def test_actionable_overlap_accepts_missing_line_and_path_key(self) -> None:
+        data = {
+            "repo": "messagesgoel-blip/demo",
+            "pr": 11,
+            "_source": "demo-11-postmerge.json",
+            "_phase": "postmerge",
+            "slopgate": {"total": 1},
+            "comparison_streams": {
+                "coderabbit_all": {
+                    "sg_only_details": [],
+                    "overlap_details": [
+                        {
+                            "file": "a.go",
+                            "line": None,
+                            "rule_id": "SLP050",
+                            "review_source": "coderabbit_all",
+                            "review_summary": "needs guard",
+                        }
+                    ],
+                    "review_only_details": [],
+                },
+                "actionable_plus_sentry": {
+                    "overlap_details": [
+                        {
+                            "path": "a.go",
+                            "line": None,
+                            "rule_id": "SLP050",
+                        }
+                    ],
+                    "review_only_details": [],
+                },
+            },
+        }
+
+        rule_rows, pr_rows, _review_rows = scorecard.build_rows([data])
+
+        only_pr_row = next(iter(pr_rows))
+        only_rule_row = next(iter(rule_rows))
+        self.assertEqual(only_pr_row["actionable_overlap"], "yes")
+        self.assertEqual(only_rule_row["actionable_overlaps"], 1)
+
     def write_benchmark(self, path: Path, *, pr: int, phase_note: str) -> None:
         path.write_text(json.dumps({
             "repo": "messagesgoel-blip/demo",

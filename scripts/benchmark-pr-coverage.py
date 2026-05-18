@@ -45,10 +45,19 @@ def artifact_prefix(repo: str, explicit: str) -> str:
 
 def find_artifacts(benchmark_dir: Path, prefix: str, pr_number: int, phases: tuple[str, ...]) -> list[Path]:
     matches: list[Path] = []
+    seen: set[Path] = set()
+
+    def append_unique(paths: list[Path]) -> None:
+        for path in paths:
+            if path not in seen:
+                matches.append(path)
+                seen.add(path)
+
     for phase in phases:
-        matches.extend(sorted(benchmark_dir.glob(f"{prefix}-{pr_number}-{phase}.json")))
+        append_unique(sorted(benchmark_dir.glob(f"{prefix}-{pr_number}-{phase}.json")))
     # Finish-loop artifacts include owner/repo in the filename for some runs.
-    matches.extend(sorted(benchmark_dir.glob(f"*-{prefix}-{pr_number}-finish.json")))
+    append_unique(sorted(benchmark_dir.glob(f"{prefix}-{pr_number}-finish.json")))
+    append_unique(sorted(benchmark_dir.glob(f"*-{prefix}-{pr_number}-finish.json")))
     return matches
 
 

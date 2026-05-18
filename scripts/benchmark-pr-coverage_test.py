@@ -23,6 +23,7 @@ class BenchmarkPRCoverageTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bench_dir = Path(tmp)
             (bench_dir / "slopgate-75-postmerge.json").write_text("{}")
+            (bench_dir / "slopgate-75-finish.json").write_text("{}")
             (bench_dir / "messagesgoel-blip-slopgate-75-finish.json").write_text("{}")
             (bench_dir / "slopgate-76-prepush.json").write_text("{}")
 
@@ -30,7 +31,11 @@ class BenchmarkPRCoverageTest(unittest.TestCase):
 
             self.assertEqual(
                 sorted(path.name for path in matches),
-                ["messagesgoel-blip-slopgate-75-finish.json", "slopgate-75-postmerge.json"],
+                [
+                    "messagesgoel-blip-slopgate-75-finish.json",
+                    "slopgate-75-finish.json",
+                    "slopgate-75-postmerge.json",
+                ],
             )
 
     def test_find_artifacts_respects_phase_filter(self) -> None:

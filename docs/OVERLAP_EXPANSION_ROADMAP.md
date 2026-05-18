@@ -56,7 +56,7 @@ Rules that catch lots but have minimal CR overlap. Narrow scope to high-risk con
 |---------|------|--------|--------|
 | **SLO-148-tune** | SLP148 | Scope to exported / module-boundary declarations only | ✅ Complete |
 | **SLO-070-deprio** | SLP070 | Downgrade severity | ✅ Already `info` (advisory, ignored in pre-commit) |
-| **SLO-017-tune** | SLP017 | Scope to public APIs/config values | Open — already `info`; deeper scope-narrowing is optional precision work |
+| **SLO-017-tune** | SLP017 | Scope to public APIs/config values | ✅ Complete — scoped to public API/config/business-domain literals |
 | **SLO-035-narrow** | SLP035 | Split the grab-bag; drop cosmetic checks | Open — already `info`; split into sub-rules is optional precision work |
 
 ---

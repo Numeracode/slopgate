@@ -104,7 +104,7 @@ With shallow clones, fetch full history (`fetch-depth: 0`) so the base ref resol
 
 ## Rules
 
-slopgate ships around 140 rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
+slopgate ships 151 registered rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
 
 | Family | IDs | Focus |
 |---|---|---|
@@ -114,6 +114,8 @@ slopgate ships around 140 rules. `slopgate --list-rules` prints the authoritativ
 | Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP205`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order overrides, swallowed promise failures, missing rollbacks |
 
 Rules `SLP081` and `SLP033` handle React/TypeScript JSX import behavior for the modern automatic runtime. `SLP081` allows plain JSX without a `React` import, but still flags explicit `React.*` namespace usage unless the file imports `React` through a default or namespace binding. `SLP033` checks import availability using visible diff context and the file snapshot when the import sits outside the changed hunk.
+
+`SLP017` magic-number findings are intentionally scoped to public API, configuration, and business-domain literals so incidental local arithmetic does not create review noise.
 
 ## Contributing
 

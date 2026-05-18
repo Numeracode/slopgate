@@ -1,0 +1,93 @@
+import importlib.util
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+SCRIPT_PATH = Path(__file__).with_name("benchmark-rule-scorecard.py")
+SPEC = importlib.util.spec_from_file_location("benchmark_rule_scorecard_under_test", SCRIPT_PATH)
+assert SPEC is not None
+assert SPEC.loader is not None
+scorecard = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = scorecard
+SPEC.loader.exec_module(scorecard)
+
+
+class BenchmarkRuleScorecardTest(unittest.TestCase):
+    def test_collect_sample_prefers_postmerge_artifact_for_same_pr(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bench_dir = Path(tmp)
+            self.write_benchmark(bench_dir / "demo-7-prepush.json", pr=7, phase_note="prepush")
+            self.write_benchmark(bench_dir / "demo-7-postmerge.json", pr=7, phase_note="postmerge")
+
+            sample = scorecard.collect_sample(bench_dir, repos={"demo"}, prs=set(), limit=20)
+
+            self.assertEqual(len(sample), 1)
+            only_sample = next(iter(sample))
+            self.assertEqual(only_sample["_phase"], "postmerge")
+            self.assertTrue(only_sample["_source"].endswith("demo-7-postmerge.json"))
+
+    def test_build_rows_marks_actionable_overlap_for_rule(self) -> None:
+        data = {
+            "repo": "messagesgoel-blip/demo",
+            "pr": 9,
+            "_source": "demo-9-postmerge.json",
+            "_phase": "postmerge",
+            "slopgate": {"total": 2},
+            "comparison_streams": {
+                "coderabbit_all": {
+                    "sg_only_details": [
+                        {
+                            "file": "a.go",
+                            "line": 3,
+                            "rule_id": "SLP043",
+                            "severity": "warn",
+                            "message": "duplicate key field",
+                        }
+                    ],
+                    "overlap_details": [
+                        {
+                            "file": "b.go",
+                            "line": 5,
+                            "rule_id": "SLP205",
+                            "review_source": "coderabbit_all",
+                            "review_summary": "real bug",
+                        }
+                    ],
+                    "review_only_details": [],
+                },
+                "actionable_plus_sentry": {
+                    "overlap_details": [
+                        {
+                            "file": "b.go",
+                            "line": 5,
+                            "rule_id": "SLP205",
+                        }
+                    ],
+                    "review_only_details": [],
+                },
+            },
+        }
+
+        rule_rows, pr_rows, review_rows = scorecard.build_rows([data])
+
+        self.assertEqual(review_rows, [])
+        by_rule = {row["rule_id"]: row for row in rule_rows}
+        self.assertEqual(by_rule["SLP205"]["actionable_overlaps"], 1)
+        self.assertEqual(by_rule["SLP205"]["suggested_action"], "keep")
+        self.assertEqual(by_rule["SLP043"]["slopgate_only"], 1)
+        self.assertEqual(len(pr_rows), 2)
+
+    def write_benchmark(self, path: Path, *, pr: int, phase_note: str) -> None:
+        path.write_text(json.dumps({
+            "repo": "messagesgoel-blip/demo",
+            "pr": pr,
+            "slopgate": {"total": 0},
+            "phase_note": phase_note,
+        }))
+
+
+if __name__ == "__main__":
+    unittest.main()

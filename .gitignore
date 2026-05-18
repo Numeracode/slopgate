@@ -2,6 +2,7 @@
 /bin/
 *.test
 *.out
+__pycache__/
 .DS_Store
 
 # Local git-hook symlinks installed by shared agent-toolkit.

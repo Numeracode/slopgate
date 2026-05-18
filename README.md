@@ -128,6 +128,23 @@ To add a rule:
 
 `scripts/benchmark_review.py <repo-path> <pr-number>` measures a rule set's overlap with hosted-review feedback on a real pull request — useful when tuning rule precision.
 
+### Rule pruning benchmark
+
+Use the archived benchmark corpus to decide which rules should stay in the default gate:
+
+```bash
+scripts/benchmark-rule-scorecard.py --limit 20 \
+  --output-dir /srv/storage/shared/slopgate-benchmarks/pruning-scorecard
+```
+
+This writes `rule_scorecard.csv`, `pr_findings.csv`, `review_misses.csv`, and `pruning_candidates.md`. Review `rule_scorecard.csv` and set `manual_decision` consistently with scorecard outcomes such as `keep`, `watch`, `quarantine`, `disable_candidate`, or `review`.
+
+To verify recent merged PRs are represented in the benchmark archive:
+
+```bash
+scripts/benchmark-pr-coverage.py messagesgoel-blip/slopgate --limit 20 --min-pr 63 --fail-on-missing
+```
+
 ## License
 
 MIT

@@ -1,12 +1,14 @@
 # Changelog
 
-## v0.0.20 (unreleased)
+## v0.0.20 (2026-05-23)
 
 - **SLP151**: orphaned test — flags a test that calls a function, method, or class which the same diff removed from a non-test source file.
 - **SLP152**: unreachable code after an if/else chain whose every branch (including a terminal else) ends with a terminator.
 - **SLP148** tuned: now scoped to exported / module-boundary declarations (JS/TS `export`, Go capitalised, Python public module-level) instead of every identifier, cutting noise on local-variable casing.
 
-## v0.0.19 (unreleased)
+Total: 151 rules (141 diff + 10 AST semantic)
+
+## v0.0.19 (2026-05-16)
 
 6 new rules for enhanced bug detection:
 
@@ -17,7 +19,7 @@
 - **SLP147**: Object destructuring from potentially undefined source without guard
 - **SLP148**: Inconsistent naming for the same conceptual variable across modules
 
-Total: 148 rules
+Total: 148 rules (138 diff + 10 AST semantic)
 
 ## v0.0.18 (2026-05-02)
 

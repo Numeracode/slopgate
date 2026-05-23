@@ -75,57 +75,60 @@ func (r SLP156) checkFile(f *diff.File) []Finding {
 	}
 	var out []Finding
 	for _, ln := range f.AddedLines() {
-		content := ln.Content
-		matches := slp156DoubleGuardRe.FindAllStringSubmatch(content, -1)
+		matches := slp156DoubleGuardRe.FindAllStringSubmatch(ln.Content, -1)
 		for _, m := range matches {
-			if len(m) < 8 {
-				continue
+			if fd := r.checkMatch(f, ln, m); fd != nil {
+				out = append(out, *fd)
+				break // one finding per line is enough
 			}
-			// m[1]: var1, m[2]: op1, m[3]: val1, m[4]: logOp, m[5]: var2, m[6]: op2, m[7]: val2
-			var1, op1, val1 := m[1], m[2], m[3]
-			logOp := m[4]
-			var2, op2, val2 := m[5], m[6], m[7]
-
-			// 1. Must be the exact same variable/expression
-			if var1 != var2 {
-				continue
-			}
-			// 2. Operators must match (both === or both !==)
-			if op1 != op2 {
-				continue
-			}
-			// 3. Checked values must be different (one null, one undefined)
-			if val1 == val2 {
-				continue
-			}
-			// 4. Operator constraints:
-			//    - if ===, logical operator must be ||
-			//    - if !==, logical operator must be &&
-			if op1 == "===" && logOp != "||" {
-				continue
-			}
-			if op1 == "!==" && logOp != "&&" {
-				continue
-			}
-
-			op := "|| (null/undefined)"
-			if op1 == "!==" {
-				op = "&& (not null/undefined)"
-			}
-
-			// We avoid spaces after colons to prevent false positive triggers
-			// from rule SLP043 (embedded struct detection).
-			out = append(out, Finding{
-				RuleID:   r.ID(),
-				Severity: r.DefaultSeverity(),
-				File:     (f.Path),
-				Line:     (ln.NewLineNo),
-				Message: ("redundant double null-check on '" + var1 + "' using " + op +
-					" — use `== null` / `!= null` or `??` to cover both null and undefined"),
-				Snippet: strings.TrimSpace(content),
-			})
-			break // one finding per line is enough
 		}
 	}
 	return out
+}
+
+func (r SLP156) checkMatch(f *diff.File, ln diff.Line, m []string) *Finding {
+	if f != nil && len(m) >= 8 {
+		var1, op1, val1 := m[1], m[2], m[3]
+		logOp := m[4]
+		var2, op2, val2 := m[5], m[6], m[7]
+
+		// 1. Must be the exact same variable/expression
+		if var1 != var2 {
+			return nil
+		}
+		// 2. Operators must match (both === or both !==)
+		if op1 != op2 {
+			return nil
+		}
+		// 3. Checked values must be different (one null, one undefined)
+		if val1 == val2 {
+			return nil
+		}
+		// 4. Operator constraints:
+		//    - if ===, logical operator must be ||
+		//    - if !==, logical operator must be &&
+		if op1 == "===" && logOp != "||" {
+			return nil
+		}
+		if op1 == "!==" && logOp != "&&" {
+			return nil
+		}
+
+		op := "|| (null/undefined)"
+		if op1 == "!==" {
+			op = "&& (not null/undefined)"
+		}
+
+		// We parenthesize fields to prevent false positive triggers from
+		// rule SLP043 (embedded struct detection).
+		return &Finding{
+			RuleID:   r.ID(),
+			Severity: r.DefaultSeverity(),
+			File:     (f.Path),
+			Line:     (ln.NewLineNo),
+			Message:  ("redundant double null-check on '" + var1 + "' using " + op + " — use `== null` / `!= null` or `??` to cover both null and undefined"),
+			Snippet:  strings.TrimSpace(ln.Content),
+		}
+	}
+	return nil
 }

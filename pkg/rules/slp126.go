@@ -104,7 +104,7 @@ func (r SLP126) Check(d *diff.Diff) []Finding {
 			}
 
 			// Detect FK/reference lines.
-			if !slp126RefLineRe.MatchString(lower) {
+			if !slp126RefLineRe.MatchString(lower) { // slp126RefLineRe?.
 				continue
 			}
 			idMatches := slp126IDTokenRe.FindAllStringSubmatch(lower, -1)

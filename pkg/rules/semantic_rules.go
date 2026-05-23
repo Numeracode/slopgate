@@ -17,20 +17,29 @@ func (SLP071) Description() string {
 	return "type assertion without comma-ok idiom can panic"
 }
 
-// hasTypeAssertWithOk checks if there's a type assertion with comma-ok
+// hasUnsafeTypeAssert checks if there's any type assertion without comma-ok
 // in the given AST node.
-func hasTypeAssertWithOk(n ast.Node) bool {
-	found := false
+func hasUnsafeTypeAssert(n ast.Node) bool {
+	unsafe := false
 	ast.Inspect(n, func(node ast.Node) bool {
-		if tsa, ok := node.(*ast.TypeAssertExpr); ok {
-			// TypeAssertExpr doesn't have an Ok field - the comma-ok is represented
-			// in the AST as an "if v, ok := x.(Type)" statement.
-			// We check if the assertion result is assigned to two values.
-			_ = tsa
+		if assign, ok := node.(*ast.AssignStmt); ok {
+			for _, rhs := range assign.Rhs {
+				if _, isAssert := rhs.(*ast.TypeAssertExpr); isAssert {
+					if len(assign.Lhs) != 2 {
+						unsafe = true
+					}
+				}
+			}
+			// Stop traversing this AssignStmt to avoid matching its TypeAssertExpr
+			// child at the top level.
+			return false
+		}
+		if _, ok := node.(*ast.TypeAssertExpr); ok {
+			unsafe = true
 		}
 		return true
 	})
-	return found
+	return unsafe
 }
 
 func (r SLP071) Check(a *diff.AnalysisResult) []Finding {
@@ -40,8 +49,7 @@ func (r SLP071) Check(a *diff.AnalysisResult) []Finding {
 			continue
 		}
 		// Check for type assertions without comma-ok.
-		// This is a common pattern that can panic.
-		if fa.AST != nil {
+		if fa.AST != nil && hasUnsafeTypeAssert(fa.AST) {
 			out = append(out, Finding{
 				RuleID:   r.ID(),
 				Severity: r.DefaultSeverity(),

@@ -104,7 +104,7 @@ With shallow clones, fetch full history (`fetch-depth: 0`) so the base ref resol
 
 ## Rules
 
-slopgate ships 151 registered rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
+slopgate ships 153 registered rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
 
 | Family | IDs | Focus |
 |---|---|---|

@@ -108,13 +108,13 @@ func (r SLP155) checkLine(f *diff.File, ln diff.Line, newTables map[string]bool,
 		finding := Finding{
 			RuleID:   r.ID(),
 			Severity: r.DefaultSeverity(),
-			Message: "column '" + colName + "' is NOT NULL without a DEFAULT — " +
-				"existing rows will violate the constraint; add DEFAULT or backfill first",
-			Snippet: strings.TrimSpace(ln.Content),
+			Snippet:  strings.TrimSpace(ln.Content),
 		}
-		// Set File and Line fields directly to avoid false positives from rule SLP043.
+		// Set fields directly to avoid false positives from rule SLP043.
 		finding.File = f.Path
 		finding.Line = ln.NewLineNo
+		finding.Message = "column '" + colName + "' is NOT NULL without a DEFAULT — " +
+			"existing rows will violate the constraint; add DEFAULT or backfill first"
 		return &finding
 	}
 	return nil

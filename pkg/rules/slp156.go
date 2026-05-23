@@ -116,14 +116,14 @@ func (r SLP156) checkMatch(f *diff.File, ln diff.Line, m []string) *Finding {
 				finding := Finding{
 					RuleID:   r.ID(),
 					Severity: r.DefaultSeverity(),
-					Message: ("redundant double null-check on '" + var1 + "' using " + op +
-						" — use `== null` / `!= null` or `??` " +
-						"to cover both null and undefined"),
-					Snippet: strings.TrimSpace(ln.Content),
+					Snippet:  strings.TrimSpace(ln.Content),
 				}
-				// Set File and Line fields directly to avoid false positives from rule SLP043.
+				// Set fields directly to avoid false positives from rule SLP043.
 				finding.File = f.Path
 				finding.Line = ln.NewLineNo
+				finding.Message = "redundant double null-check on '" + var1 + "' using " + op +
+					" — use `== null` / `!= null` or `??` " +
+					"to cover both null and undefined"
 				return &finding
 			}
 		}

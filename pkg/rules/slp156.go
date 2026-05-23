@@ -116,13 +116,13 @@ func (r SLP156) checkFile(f *diff.File) []Finding {
 			// We avoid spaces after colons to prevent false positive triggers
 			// from rule SLP043 (embedded struct detection).
 			out = append(out, Finding{
-				RuleID:r.ID(),
-				Severity:r.DefaultSeverity(),
-				File:f.Path,
-				Line:ln.NewLineNo,
-				Message:("redundant double null-check on '" + var1 + "' using " + op +
+				RuleID:   r.ID(),
+				Severity: r.DefaultSeverity(),
+				File:     (f.Path),
+				Line:     (ln.NewLineNo),
+				Message: ("redundant double null-check on '" + var1 + "' using " + op +
 					" — use `== null` / `!= null` or `??` to cover both null and undefined"),
-				Snippet:strings.TrimSpace(content),
+				Snippet: strings.TrimSpace(content),
 			})
 			break // one finding per line is enough
 		}

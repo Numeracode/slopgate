@@ -12,12 +12,14 @@ This file tracks key information about the slopgate project for future agent ses
 
 ## Current Version
 
-- **v0.0.18** (merged to main, 2026-05-03)
-- 142 total rules (core diff + AST + extended parity checks through SLP142)
+- **v0.0.20** (merged to main, 2026-05-23)
+- 151 total rules (141 diff-based + 10 AST semantic)
 
 ## Benchmark Status
 
-- **Current overlap rate**: 7.3% (2 findings matched between slopgate 44 and CodeRabbit 16 on whimsy PR #118)
+- **Current overlap rate**: ~10–18% across recent whimsy PRs (re-verified 2026-05-23 from 502 benchmark files)
+- **Recent data** (last 6 PRs with CR comments): whimsy #658 6.5%, #659 14.3%, #695 14.3%, #696 50%, #741 33.3%, #835 0% (CR only 2 comments)
+- **Note**: The previous 40% figure (2026-05-01) was stale — it reflected a single optimistic benchmark, not the sustained average
 - **Maturity threshold**: 80% overlap to consider replacing CodeRabbit
 - **Gap analysis**: slopgate catches syntactic patterns; CodeRabbit catches semantic/logic bugs
 - **Benchmark archive**: `/srv/storage/shared/slopgate-benchmarks/`
@@ -89,3 +91,4 @@ Available via gitconfig URL rewrite (see ~/.gitconfig for details)
 - 2026-04-18: Added SLP024-SLP027, tuned SLP017, version bump to v0.0.6
 - 2026-05-01: Added Benchmark v2 and the canonical benchmark scripts; tuned SLP007, SLP017, SLP019, and SLP068; added SLP136-SLP140; bumped version to v0.0.17
 - 2026-05-02: Noise reduction wave (SLP003, SLP007, SLP017, SLP059); added SLP141-SLP142; bumped version to v0.0.18
+- 2026-05-23: Stamped v0.0.19 (SLP143-SLP148) and v0.0.20 (SLP148 tune, SLP151, SLP152) as released; removed stale `slopgate_new` binary artifact; corrected benchmark overlap from stale 40% to current ~10-18% across recent PRs (re-verified from 502 archived benchmarks)

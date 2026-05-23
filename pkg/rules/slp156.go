@@ -93,54 +93,40 @@ func (r SLP156) checkFile(f *diff.File) []Finding {
 
 func (r SLP156) checkMatch(f *diff.File, ln diff.Line, m []string) *Finding {
 	// Validate inputs explicitly to satisfy SLP050.
-	if m == nil || f == nil || len(m) < 8 {
+	if m == nil || f == nil {
 		return nil
 	}
-	var1, op1, val1 := m[1], m[2], m[3]
-	logOp := m[4]
-	var2, op2, val2 := m[5], m[6], m[7]
+	// Verify lengths with positive check to satisfy SLP118.
+	if len(m) >= 8 {
+		var1, op1, val1 := m[1], m[2], m[3]
+		logOp := m[4]
+		var2, op2, val2 := m[5], m[6], m[7]
 
-	// 1. Must be the exact same variable/expression.
-	if var1 != var2 || !slp156IsValidGuard(op1, op2, val1, val2, logOp) {
-		return nil
-	}
+		// 1. Must be the exact same variable/expression.
+		// 2. Operators must match (both === or both !==).
+		// 3. Checked values must be different (one null, one undefined).
+		if var1 == var2 && op1 == op2 && val1 != val2 {
+			// 4. Operator constraints (=== logical ||, !== logical &&).
+			if (op1 == "===" && logOp == "||") || (op1 == "!==" && logOp == "&&") {
+				op := "|| (null/undefined)"
+				if op1 == "!==" {
+					op = "&& (not null/undefined)"
+				}
 
-	op := "|| (null/undefined)"
-	if op1 == "!==" {
-		op = "&& (not null/undefined)"
+				// We parenthesize fields to prevent false positive triggers from
+				// rule SLP043 (embedded struct detection).
+				return &Finding{
+					RuleID:   r.ID(),
+					Severity: r.DefaultSeverity(),
+					File:     (f.Path),
+					Line:     (ln.NewLineNo),
+					Message: ("redundant double null-check on '" + var1 + "' using " + op +
+						" — use `== null` / `!= null` or `??` " +
+						"to cover both null and undefined"),
+					Snippet: strings.TrimSpace(ln.Content),
+				}
+			}
+		}
 	}
-
-	// We parenthesize fields to prevent false positive triggers from
-	// rule SLP043 (embedded struct detection).
-	return &Finding{
-		RuleID:   r.ID(),
-		Severity: r.DefaultSeverity(),
-		File:     (f.Path),
-		Line:     (ln.NewLineNo),
-		Message: ("redundant double null-check on '" + var1 + "' using " + op +
-			" — use `== null` / `!= null` or `??` " +
-			"to cover both null and undefined"),
-		Snippet: strings.TrimSpace(ln.Content),
-	}
-}
-
-func slp156IsValidGuard(op1, op2, val1, val2, logOp string) bool {
-	// 2. Operators must match (both === or both !==).
-	if op1 != op2 {
-		return false
-	}
-	// 3. Checked values must be different (one null, one undefined).
-	if val1 == val2 {
-		return false
-	}
-	// 4. Operator constraints:
-	//    - if ===, logical operator must be ||
-	//    - if !==, logical operator must be &&
-	if op1 == "===" && logOp != "||" {
-		return false
-	}
-	if op1 == "!==" && logOp != "&&" {
-		return false
-	}
-	return true
+	return nil
 }

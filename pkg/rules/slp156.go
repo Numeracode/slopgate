@@ -40,6 +40,9 @@ func (SLP156) Description() string {
 var slp156DoubleGuardRe = regexp.MustCompile(
 	`\b([\w$.]+(?:\.[\w$]+)*)\s*(===|!==)\s*(null|undefined)\s*(\|\||&&)\s*([\w$.]+(?:\.[\w$]+)*)\s*(===|!==)\s*(null|undefined)\b`)
 
+// Matches JS/TS comment lines to avoid false-positives.
+var slp156CommentLineRe = regexp.MustCompile(`^\s*(//|/\*|\*)`)
+
 func slp156IsJSTS(path string) bool {
 	if path == "" {
 		return false
@@ -79,6 +82,10 @@ func (r SLP156) checkFile(f *diff.File) []Finding {
 	// that triggers on loop range expressions with function calls.
 	addedLines := f.AddedLines()
 	for _, ln := range addedLines {
+		trimmed := strings.TrimSpace(ln.Content)
+		if trimmed == "" || slp156CommentLineRe.MatchString(trimmed) {
+			continue
+		}
 		matches := slp156DoubleGuardRe.FindAllStringSubmatch(ln.Content, -1)
 		for _, m := range matches {
 			// Validate match and extract finding if it is a redundant guard.

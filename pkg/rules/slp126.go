@@ -31,10 +31,10 @@ var slp126IDTokenRe = regexp.MustCompile(`(?i)\b([a-z0-9_]+_id)\b`)
 var slp126IndexLineRe = regexp.MustCompile(`(?i)\b(create\s+(unique\s+)?index|add\s+index)`)
 
 // extracts the table name from a CREATE INDEX … ON <table>(…) line.
-var slp126IndexOnTableRe = regexp.MustCompile(`(?i)\bon\s+([a-z0-9_"]+)\s*\(`)
+var slp126IndexOnTableRe = regexp.MustCompile(`(?i)\bon\s+([a-z0-9_"\.]+)\s*\(`)
 
 // matches a CREATE TABLE / ALTER TABLE line to track the current table context.
-var slp126TableRe = regexp.MustCompile(`(?i)\b(create\s+table(?:\s+if\s+not\s+exists)?|alter\s+table)\s+([a-z0-9_"]+)`)
+var slp126TableRe = regexp.MustCompile(`(?i)\b(create\s+table(?:\s+if\s+not\s+exists)?|alter\s+table)\s+([a-z0-9_"\.]+)`)
 
 func slp126IsMigrationSQL(path string) bool {
 	lower := strings.ToLower(path)
@@ -80,14 +80,14 @@ func (r SLP126) Check(d *diff.Diff) []Finding {
 
 			// Track current CREATE TABLE / ALTER TABLE context.
 			if m := slp126TableRe.FindStringSubmatch(lower); len(m) >= 3 {
-				currentTable = strings.Trim(m[2], `"`)
+				currentTable = strings.ReplaceAll(m[2], `"`, "")
 			}
 
 			// Track CREATE INDEX … ON table(col, …).
 			if slp126IndexLineRe.MatchString(lower) {
 				tableName := currentTable
 				if tm := slp126IndexOnTableRe.FindStringSubmatch(lower); len(tm) >= 2 {
-					tableName = strings.Trim(tm[1], `"`)
+					tableName = strings.ReplaceAll(tm[1], `"`, "")
 				}
 				if tableName != "" {
 					if indexedByTable[tableName] == nil {
@@ -137,6 +137,19 @@ func (r SLP126) Check(d *diff.Diff) []Finding {
 			globalIdxs := indexedByTable[""]
 			if tableIdxs[c.column] || globalIdxs[c.column] {
 				continue
+			}
+			// If table is unknown, check if ANY table has an index on this column.
+			if c.table == "" {
+				indexedInAnyTable := false
+				for _, cols := range indexedByTable {
+					if cols[c.column] {
+						indexedInAnyTable = true
+						break
+					}
+				}
+				if indexedInAnyTable {
+					continue
+				}
 			}
 			finding := Finding{
 				RuleID:   r.ID(),

@@ -39,11 +39,11 @@ var slp155DefaultRe = regexp.MustCompile(`(?i)\bdefault\b`)
 
 // matches CREATE TABLE [IF NOT EXISTS] <name> to track newly-created tables.
 var slp155CreateTableRe = regexp.MustCompile(
-	`(?i)\bcreate\s+table(?:\s+if\s+not\s+exists)?\s+([a-z0-9_"]+)`)
+	`(?i)\bcreate\s+table(?:\s+if\s+not\s+exists)?\s+([a-z0-9_"\.]+)`)
 
 // matches ALTER TABLE <name>.
 var slp155AlterTableRe = regexp.MustCompile(
-	`(?i)\balter\s+table\s+([a-z0-9_"]+)`)
+	`(?i)\balter\s+table\s+([a-z0-9_"\.]+)`)
 
 func (r SLP155) Check(d *diff.Diff) []Finding {
 	if d == nil {
@@ -86,11 +86,11 @@ func (r SLP155) checkLine(f *diff.File, ln diff.Line, newTables map[string]bool,
 	lower := strings.ToLower(content)
 
 	if m := slp155CreateTableRe.FindStringSubmatch(lower); len(m) >= 2 {
-		newTables[strings.Trim(m[1], `"`)] = true
+		newTables[strings.ReplaceAll(m[1], `"`, "")] = true
 	}
 
 	if m := slp155AlterTableRe.FindStringSubmatch(lower); len(m) >= 2 {
-		*currentAlterTable = strings.Trim(m[1], `"`)
+		*currentAlterTable = strings.ReplaceAll(m[1], `"`, "")
 	}
 
 	m := slp155AddColRe.FindStringSubmatch(lower)

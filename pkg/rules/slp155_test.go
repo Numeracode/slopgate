@@ -90,3 +90,34 @@ func TestSLP155_Description(t *testing.T) {
 		t.Errorf("default severity = %v, want warn", r.DefaultSeverity())
 	}
 }
+
+func TestSLP155_SchemaQualifiedRelation(t *testing.T) {
+	// 1. Should fire on schema-qualified alter table without default on existing table
+	d1 := parseDiff(t, `diff --git a/api/migrations/122_add_status/migration.sql b/api/migrations/122_add_status/migration.sql
+--- a/api/migrations/122_add_status/migration.sql
++++ b/api/migrations/122_add_status/migration.sql
+@@ -0,0 +1,3 @@
++ALTER TABLE "public"."jobs"
++  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL;
+`)
+	got1 := SLP155{}.Check(d1)
+	if len(got1) == 0 {
+		t.Fatal("expected finding on schema-qualified alter table without default")
+	}
+
+	// 2. Should NOT fire on schema-qualified new table created in same diff
+	d2 := parseDiff(t, `diff --git a/api/migrations/123_new_table/migration.sql b/api/migrations/123_new_table/migration.sql
+--- a/api/migrations/123_new_table/migration.sql
++++ b/api/migrations/123_new_table/migration.sql
+@@ -0,0 +1,7 @@
++CREATE TABLE public.new_things (
++  id TEXT PRIMARY KEY
++);
++ALTER TABLE public.new_things
++  ADD COLUMN name TEXT NOT NULL;
+`)
+	got2 := SLP155{}.Check(d2)
+	if len(got2) != 0 {
+		t.Fatalf("expected 0 findings for schema-qualified new table, got %d", len(got2))
+	}
+}

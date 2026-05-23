@@ -51,7 +51,7 @@ func TestSLP156_NoFireOnIdiomatic(t *testing.T) {
 		`+    if (x != null) { use(x); }`,
 	}
 	for _, c := range cases {
-		d := parseDiff(t, "diff --git a/src/util.ts b/src/util.ts\n--- a/src/util.ts\n+++ b/src/util.ts\n@@ -1 +1,2 @@\n "+c+"\n")
+		d := parseDiff(t, "diff --git a/src/util.ts b/src/util.ts\n--- a/src/util.ts\n+++ b/src/util.ts\n@@ -1 +1,2 @@\n"+c+"\n")
 		got := SLP156{}.Check(d)
 		if len(got) != 0 {
 			t.Errorf("expected 0 findings for idiomatic pattern %q, got %d", c, len(got))
@@ -69,6 +69,21 @@ func TestSLP156_NoFireOnNonJSFile(t *testing.T) {
 	got := SLP156{}.Check(d)
 	if len(got) != 0 {
 		t.Fatalf("expected 0 findings for Go file, got %d", len(got))
+	}
+}
+
+func TestSLP156_NoFireOnComments(t *testing.T) {
+	d := parseDiff(t, `diff --git a/src/util.ts b/src/util.ts
+--- a/src/util.ts
++++ b/src/util.ts
+@@ -1 +1,3 @@
++    // const val = x === null || x === undefined ? undefined : use(x);
++    /* x === null || x === undefined */
++    * x === null || x === undefined
+`)
+	got := SLP156{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings for comment-only double null-checks, got %d", len(got))
 	}
 }
 

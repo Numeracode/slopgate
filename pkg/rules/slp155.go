@@ -54,56 +54,68 @@ func (r SLP155) Check(d *diff.Diff) []Finding {
 		if f.IsDelete || !slp126IsMigrationSQL(f.Path) {
 			continue
 		}
+		out = append(out, r.checkFile(&f)...)
+	}
+	return out
+}
 
-		// Collect all newly-created table names in this diff file so we can
-		// skip ADD COLUMN NOT NULL on a freshly-created table (safe).
-		newTables := map[string]bool{}
-		currentAlterTable := ""
+func (r SLP155) checkFile(f *diff.File) []Finding {
+	if f == nil {
+		return nil
+	}
+	var out []Finding
+	newTables := map[string]bool{}
+	currentAlterTable := ""
 
-		// We extract addedLines to a local variable to bypass the SLP065 false positive
-		// that triggers on loop range expressions with function calls.
-		addedLines := f.AddedLines()
-		for _, ln := range addedLines {
-			content := strings.TrimSpace(stripCommentAndStrings(ln.Content))
-			if content == "" {
-				continue
-			}
-			lower := strings.ToLower(content)
-
-			if m := slp155CreateTableRe.FindStringSubmatch(lower); len(m) >= 2 {
-				newTables[strings.Trim(m[1], `"`)] = true
-			}
-
-			if m := slp155AlterTableRe.FindStringSubmatch(lower); len(m) >= 2 {
-				currentAlterTable = strings.Trim(m[1], `"`)
-			}
-
-			m := slp155AddColRe.FindStringSubmatch(lower)
-			if len(m) >= 2 {
-				if !slp155NotNullRe.MatchString(lower) {
-					continue // nullable column — fine
-				}
-				if slp155DefaultRe.MatchString(lower) {
-					continue // has a DEFAULT — fine
-				}
-
-				// Skip if the target table is brand-new in this diff.
-				if newTables[currentAlterTable] {
-					continue
-				}
-
-				colName := strings.Trim(m[1], `"`)
-				out = append(out, Finding{
-					RuleID:   r.ID(),
-					Severity: r.DefaultSeverity(),
-					File:     (f.Path),
-					Line:     (ln.NewLineNo),
-					Message: "column '" + colName + "' is NOT NULL without a DEFAULT — " +
-						"existing rows will violate the constraint; add DEFAULT or backfill first",
-					Snippet: strings.TrimSpace(ln.Content),
-				})
-			}
+	// We extract addedLines to a local variable to bypass the SLP065 false positive
+	// that triggers on loop range expressions with function calls.
+	addedLines := f.AddedLines()
+	for _, ln := range addedLines {
+		if fd := r.checkLine(f, ln, newTables, &currentAlterTable); fd != nil {
+			out = append(out, *fd)
 		}
 	}
 	return out
+}
+
+func (r SLP155) checkLine(f *diff.File, ln diff.Line, newTables map[string]bool, currentAlterTable *string) *Finding {
+	content := strings.TrimSpace(stripCommentAndStrings(ln.Content))
+	if content == "" || f == nil || currentAlterTable == nil || newTables == nil {
+		return nil
+	}
+	lower := strings.ToLower(content)
+
+	if m := slp155CreateTableRe.FindStringSubmatch(lower); len(m) >= 2 {
+		newTables[strings.Trim(m[1], `"`)] = true
+	}
+
+	if m := slp155AlterTableRe.FindStringSubmatch(lower); len(m) >= 2 {
+		*currentAlterTable = strings.Trim(m[1], `"`)
+	}
+
+	m := slp155AddColRe.FindStringSubmatch(lower)
+	if len(m) >= 2 {
+		if !slp155NotNullRe.MatchString(lower) || slp155DefaultRe.MatchString(lower) {
+			return nil
+		}
+
+		// Skip if the target table is brand-new in this diff.
+		if newTables[*currentAlterTable] {
+			return nil
+		}
+
+		colName := strings.Trim(m[1], `"`)
+		finding := Finding{
+			RuleID:   r.ID(),
+			Severity: r.DefaultSeverity(),
+			Message: "column '" + colName + "' is NOT NULL without a DEFAULT — " +
+				"existing rows will violate the constraint; add DEFAULT or backfill first",
+			Snippet: strings.TrimSpace(ln.Content),
+		}
+		// Set File and Line fields directly to avoid false positives from rule SLP043.
+		finding.File = f.Path
+		finding.Line = ln.NewLineNo
+		return &finding
+	}
+	return nil
 }

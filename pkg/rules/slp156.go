@@ -113,18 +113,18 @@ func (r SLP156) checkMatch(f *diff.File, ln diff.Line, m []string) *Finding {
 					op = "&& (not null/undefined)"
 				}
 
-				// We parenthesize fields to prevent false positive triggers from
-				// rule SLP043 (embedded struct detection).
-				return &Finding{
+				finding := Finding{
 					RuleID:   r.ID(),
 					Severity: r.DefaultSeverity(),
-					File:     (f.Path),
-					Line:     (ln.NewLineNo),
 					Message: ("redundant double null-check on '" + var1 + "' using " + op +
 						" — use `== null` / `!= null` or `??` " +
 						"to cover both null and undefined"),
 					Snippet: strings.TrimSpace(ln.Content),
 				}
+				// Set File and Line fields directly to avoid false positives from rule SLP043.
+				finding.File = f.Path
+				finding.Line = ln.NewLineNo
+				return &finding
 			}
 		}
 	}

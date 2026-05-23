@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.21 (unreleased)
+
+- **SLP068 / SLP113**: Quarantined to `info` severity to significantly reduce noise in benchmarks and scorecard evaluations.
+- **SLP126**: Made the migration foreign key check table-scoped to fix false negatives when multiple tables are modified in the same migration file.
+- **SLP155**: New rule checking for `ALTER TABLE ... ADD COLUMN ... NOT NULL` without a `DEFAULT` value.
+- **SLP156**: New rule catching redundant JS/TS double-guards checking both `=== null` and `=== undefined`.
+- **Benchmark precision**: Removed the detail list truncation cap in `benchmark_review.py`.
+
 ## v0.0.20 (unreleased)
 
 - **SLP151**: orphaned test — flags a test that calls a function, method, or class which the same diff removed from a non-test source file.

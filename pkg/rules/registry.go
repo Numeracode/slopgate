@@ -156,6 +156,9 @@ func Default() *Registry {
 	// P3: Add new CR-flag patterns.
 	r.Register(SLP151{}) // orphaned test detection
 	r.Register(SLP152{}) // unreachable code after a terminating if/else
+	// Precision improvements: migration safety + JS null-guard noise.
+	r.Register(SLP155{}) // ADD COLUMN NOT NULL without DEFAULT
+	r.Register(SLP156{}) // redundant null+undefined double-guard
 	// P1: Close Sentry bug gap — null dereference guard.
 	r.Register(SLP202{})
 	// P1: Close Sentry bug gap — DB constraint violation.

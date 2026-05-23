@@ -195,7 +195,7 @@ func TestSLP068_Meta(t *testing.T) {
 	if r.Description() == "" {
 		t.Errorf("Description is empty")
 	}
-	if r.DefaultSeverity() != SeverityWarn {
-		t.Errorf("default severity should be warn")
+	if r.DefaultSeverity() != SeverityInfo {
+		t.Errorf("default severity should be info")
 	}
 }

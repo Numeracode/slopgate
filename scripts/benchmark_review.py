@@ -883,9 +883,9 @@ def match_stream(
         },
         "coverage_pct": round((overlap / review_total * 100) if review_total else 0, 1),
         "precision_proxy_pct": round((overlap / len(sg_findings) * 100) if sg_findings else 0, 1),
-        "overlap_details": overlap_details[:50],
-        "review_only_details": review_only[:50],
-        "sg_only_details": sg_only[:50],
+        "overlap_details": overlap_details,
+        "review_only_details": review_only,
+        "sg_only_details": sg_only,
     }
 
 

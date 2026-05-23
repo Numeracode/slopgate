@@ -10,7 +10,7 @@ import (
 type SLP068 struct{}
 
 func (SLP068) ID() string                { return "SLP068" }
-func (SLP068) DefaultSeverity() Severity { return SeverityWarn }
+func (SLP068) DefaultSeverity() Severity { return SeverityInfo }
 func (SLP068) Description() string {
 	return "duplicate logic block within the same file"
 }

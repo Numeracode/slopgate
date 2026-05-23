@@ -11,7 +11,7 @@ import (
 type SLP113 struct{}
 
 func (SLP113) ID() string                { return "SLP113" }
-func (SLP113) DefaultSeverity() Severity { return SeverityWarn }
+func (SLP113) DefaultSeverity() Severity { return SeverityInfo }
 func (SLP113) Description() string {
 	return "source file changed without corresponding test update — update tests or add a test file"
 }

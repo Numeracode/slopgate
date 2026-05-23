@@ -93,8 +93,8 @@ func (r SLP155) Check(d *diff.Diff) []Finding {
 			out = append(out, Finding{
 				RuleID:   r.ID(),
 				Severity: r.DefaultSeverity(),
-				File:     f.Path,
-				Line:     ln.NewLineNo,
+				File:     (f.Path),
+				Line:     (ln.NewLineNo),
 				Message: "column '" + colName + "' is NOT NULL without a DEFAULT — " +
 					"existing rows will violate the constraint; add DEFAULT or backfill first",
 				Snippet: strings.TrimSpace(ln.Content),

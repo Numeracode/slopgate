@@ -398,59 +398,50 @@ def run_slopgate(slug: str, worktree: WorktreeContext) -> tuple[dict[str, Any], 
     return report, proc.stderr.strip()
 
 
-def collect_coderabbit_all(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    return collect_bot_pr_comments(owner_repo_name, pr_number, ["coderabbit", "code-rabbit"], "coderabbit_all")
-
-
-def collect_sentry_pr_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    """Collect Sentry bot review comments from GitHub PR review comments."""
-    return collect_bot_pr_comments(owner_repo_name, pr_number, "sentry[bot]", "sentry")
-
-
-def collect_gemini_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    """Collect Gemini Code Assist review comments from GitHub PR review comments."""
-    return collect_bot_pr_comments(owner_repo_name, pr_number, "gemini-code-assist[bot]", "gemini")
-
-
-def collect_deepsource_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    """Collect DeepSource review comments from GitHub PR review comments."""
-    return collect_bot_pr_comments(owner_repo_name, pr_number, "deepsource-io[bot]", "deepsource")
-
-
-def collect_qodo_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    """Collect Qodo (formerly CodiumAI) review comments from GitHub PR review comments."""
-    return collect_bot_pr_comments(owner_repo_name, pr_number, "qodo-code-review[bot]", "qodo")
-
-
-def collect_bot_pr_comments(
+def collect_all_pr_comments(
     owner_repo_name: str,
     pr_number: int,
-    login_match: str | list[str],
-    source_name: str,
-) -> list[ReviewFinding]:
-    """Generic collector for bot PR review comments. Matches login by exact string or substring."""
+) -> tuple[list[ReviewFinding], dict[str, list[ReviewFinding]]]:
+    """Fetch ALL PR review comments (any reviewer). Returns (all_findings, by_reviewer)."""
     comments_raw = gh_api_json([f"repos/{owner_repo_name}/pulls/{pr_number}/comments", "--paginate"])
-    findings: list[ReviewFinding] = []
-    matches = [login_match.lower()] if isinstance(login_match, str) else [m.lower() for m in login_match]
+    all_findings: list[ReviewFinding] = []
+    by_reviewer: dict[str, list[ReviewFinding]] = {}
     for item in comments_raw:
-        login = ((item.get("user") or {}).get("login") or "").lower()
-        if not any(m in login for m in matches):
-            continue
+        login = ((item.get("user") or {}).get("login") or "unknown")
         line = item.get("line") or item.get("original_line")
         path = item.get("path")
         if not path or line is None:
             continue
-        findings.append(
-            ReviewFinding(
-                path=path,
-                line=int(line),
-                body=trim_body(item.get("body", "")),
-                item_id=str(item.get("id", "")),
-                source=source_name,
-                meta={"resolved": None},
-            )
+        finding = ReviewFinding(
+            path=path,
+            line=int(line),
+            body=trim_body(item.get("body", "")),
+            item_id=str(item.get("id", "")),
+            source="all_reviewers",
+            meta={"resolved": None, "reviewer": login},
         )
-    print(f"{source_name}: {len(findings)} review comments", file=sys.stderr)
+        all_findings.append(finding)
+        by_reviewer.setdefault(login, []).append(finding)
+    print(f"all_reviewers: {len(all_findings)} review comments from {len(by_reviewer)} reviewers", file=sys.stderr)
+    return all_findings, by_reviewer
+
+
+def filter_by_reviewer(
+    by_reviewer: dict[str, list[ReviewFinding]],
+    login_match: str | list[str],
+    source_name: str,
+) -> list[ReviewFinding]:
+    """Filter the by_reviewer dict by login pattern (substring match)."""
+    matches = [login_match.lower()] if isinstance(login_match, str) else [m.lower() for m in login_match]
+    findings: list[ReviewFinding] = []
+    for login, reviewer_findings in by_reviewer.items():
+        if not any(m in login.lower() for m in matches):
+            continue
+        for f in reviewer_findings:
+            findings.append(ReviewFinding(
+                path=f.path, line=f.line, body=f.body, item_id=f.item_id,
+                source=source_name, meta={"resolved": f.meta.get("resolved")},
+            ))
     return findings
 
 
@@ -687,6 +678,7 @@ def build_score_summary(
 def build_tier_result(
     sg_findings: list[dict[str, Any]],
     all_comments: list[ReviewFinding],
+    all_review_findings: list[ReviewFinding],
     actionable_comments: list[ReviewFinding],
     sentry_findings: list[ReviewFinding],
     gemini_findings: list[ReviewFinding],
@@ -696,6 +688,7 @@ def build_tier_result(
     fuzzy_range: int,
 ) -> dict[str, Any]:
     all_result = match_stream(sg_findings, all_comments, fuzzy_range)
+    all_reviewers_result = match_stream(sg_findings, all_review_findings, fuzzy_range)
     actionable_result = match_stream(sg_findings, actionable_comments, fuzzy_range)
     sentry_result = match_stream(sg_findings, sentry_findings, fuzzy_range)
     gemini_result = match_stream(sg_findings, gemini_findings, fuzzy_range)
@@ -707,6 +700,7 @@ def build_tier_result(
         "comparison": all_result["comparison"],
         "scores": build_score_summary(all_result, actionable_result, combined_result),
         "streams": {
+            "all_reviewers": {"total": len(all_review_findings)},
             "coderabbit_all": {"total": len(all_comments)},
             "coderabbit_actionable": {"total": len(actionable_comments)},
             "sentry": {"total": len(sentry_findings)},
@@ -716,6 +710,7 @@ def build_tier_result(
             "actionable_plus_sentry": {"total": len(combined_actionable)},
         },
         "comparison_streams": {
+            "all_reviewers": all_reviewers_result,
             "coderabbit_all": all_result,
             "coderabbit_actionable": actionable_result,
             "sentry": sentry_result,
@@ -733,6 +728,7 @@ def build_tier_result(
         "gemini_only_details": gemini_result["review_only_details"],
         "deepsource_only_details": deepsource_result["review_only_details"],
         "qodo_only_details": qodo_result["review_only_details"],
+        "all_reviewers_only_details": all_reviewers_result["review_only_details"],
         "actionable_plus_sentry_only_details": combined_result["review_only_details"],
     }
 
@@ -740,6 +736,7 @@ def build_tier_result(
 def build_benchmark_tiers(
     sg_findings: list[dict[str, Any]],
     all_comments: list[ReviewFinding],
+    all_review_findings: list[ReviewFinding],
     actionable_comments: list[ReviewFinding],
     sentry_findings: list[ReviewFinding],
     gemini_findings: list[ReviewFinding],
@@ -751,7 +748,7 @@ def build_benchmark_tiers(
     block_warn_only = [f for f in sg_findings if f["severity"] in {"block", "warn"}]
     benchmark_eligible = [f for f in sg_findings if f["benchmark_eligible"]]
     tier_args = lambda sg: (
-        sg, all_comments, actionable_comments, sentry_findings,
+        sg, all_comments, all_review_findings, actionable_comments, sentry_findings,
         gemini_findings, deepsource_findings, qodo_findings,
         combined_actionable, fuzzy_range,
     )
@@ -774,6 +771,7 @@ def build_benchmark_metadata() -> dict[str, Any]:
             "gemini": "Gemini Code Assist PR review comments",
             "deepsource": "DeepSource PR review comments",
             "qodo": "Qodo (CodiumAI) PR review comments",
+            "all_reviewers": "All PR review comments (any reviewer, no login filter)",
             "actionable_plus_sentry": "Combined stream: actionable CR + Sentry + Gemini + DeepSource + Qodo (deduplicated by location)",
         },
     }
@@ -792,6 +790,8 @@ def build_result_payload(
     gemini_findings: list[ReviewFinding],
     deepsource_findings: list[ReviewFinding],
     qodo_findings: list[ReviewFinding],
+    all_review_findings: list[ReviewFinding],
+    reviewer_breakdown: dict[str, int],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
     slopgate_stderr: str,
@@ -800,6 +800,7 @@ def build_result_payload(
     benchmark_tiers = build_benchmark_tiers(
         sg_findings,
         all_comments,
+        all_review_findings,
         actionable_comments,
         sentry_findings,
         gemini_findings,
@@ -820,6 +821,8 @@ def build_result_payload(
         "benchmark_mode": context.mode,
         "checkout_ref": context.target_ref,
         "slopgate": report.get("summary") or legacy_tier["slopgate"],
+        "all_reviewers": {"total": len(all_review_findings)},
+        "reviewer_breakdown": reviewer_breakdown,
         "coderabbit": {"total": len(all_comments)},
         "coderabbit_actionable": {"total": len(actionable_comments)},
         "sentry": {"total": len(sentry_findings)},
@@ -840,6 +843,7 @@ def build_result_payload(
         "gemini_only_details": legacy_tier["gemini_only_details"],
         "deepsource_only_details": legacy_tier["deepsource_only_details"],
         "qodo_only_details": legacy_tier["qodo_only_details"],
+        "all_reviewers_only_details": legacy_tier["all_reviewers_only_details"],
         "actionable_plus_sentry_only_details": legacy_tier["actionable_plus_sentry_only_details"],
         "benchmark_metadata": build_benchmark_metadata(),
         "benchmark_tiers": benchmark_tiers,
@@ -971,22 +975,27 @@ def main() -> int:
     context = prepare_worktree(root, pr_meta, args.pr_number, requested_base)
     try:
         report, slopgate_stderr = run_slopgate(slug, context)
-        all_comments = collect_coderabbit_all(slug, args.pr_number)
+        # Single API call for all PR review comments
+        all_review_findings, by_reviewer = collect_all_pr_comments(slug, args.pr_number)
+        reviewer_breakdown = {login: len(findings) for login, findings in sorted(by_reviewer.items(), key=lambda x: -len(x[1]))}
+        # Derive bot-specific streams from the unified result
+        all_comments = filter_by_reviewer(by_reviewer, ["coderabbit", "code-rabbit"], "coderabbit_all")
         actionable_comments = collect_coderabbit_actionable(slug, args.pr_number)
-        sentry_findings = collect_sentry_findings(
+        sentry_pr_findings = filter_by_reviewer(by_reviewer, ["sentry[bot]"], "sentry")
+        gemini_findings = filter_by_reviewer(by_reviewer, ["gemini-code-assist[bot]"], "gemini")
+        deepsource_findings = filter_by_reviewer(by_reviewer, ["deepsource-io[bot]"], "deepsource")
+        qodo_findings = filter_by_reviewer(by_reviewer, ["qodo-code-review[bot]"], "qodo")
+        # Sentry API findings (issues/events) are separate from PR comments.
+        sentry_api_findings = collect_sentry_findings(
             args.sentry_helper,
             args.sentry_project,
             args.sentry_stats_period,
             args.sentry_query,
             context.worktree_path,
         )
-        sentry_pr_findings = collect_sentry_pr_comments(slug, args.pr_number)
-        gemini_findings = collect_gemini_comments(slug, args.pr_number)
-        deepsource_findings = collect_deepsource_comments(slug, args.pr_number)
-        qodo_findings = collect_qodo_comments(slug, args.pr_number)
-        # Merge Sentry API findings with Sentry GitHub bot comments, deduplicating by (path, line)
+        # Merge Sentry API findings with Sentry bot PR comments, deduplicating by (path, line)
         sentry_by_location: dict[tuple[str, int], ReviewFinding] = {}
-        for item in sentry_findings + sentry_pr_findings:
+        for item in sentry_api_findings + sentry_pr_findings:
             key = (item.path, item.line)
             if key not in sentry_by_location:
                 sentry_by_location[key] = item
@@ -1006,6 +1015,8 @@ def main() -> int:
             gemini_findings=gemini_findings,
             deepsource_findings=deepsource_findings,
             qodo_findings=qodo_findings,
+            all_review_findings=all_review_findings,
+            reviewer_breakdown=reviewer_breakdown,
             combined_actionable=combined_actionable,
             fuzzy_range=args.fuzzy_range,
             slopgate_stderr=slopgate_stderr,

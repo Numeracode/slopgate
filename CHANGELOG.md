@@ -6,6 +6,9 @@
 - **SLP126**: Made the migration foreign key check table-scoped to fix false negatives when multiple tables are modified in the same migration file.
 - **SLP155**: New rule checking for `ALTER TABLE ... ADD COLUMN ... NOT NULL` without a `DEFAULT` value.
 - **SLP156**: New rule catching redundant JS/TS double-guards checking both `=== null` and `=== undefined`.
+- **SLP208**: New rule catching TypeScript/JavaScript default parameters placed before required parameters.
+- **SLP209**: New rule catching async arrow functions that return on some paths but not all (missing return at end of body).
+- **Benchmark**: Added Gemini Code Assist and DeepSource as new review bot streams in benchmark_review.py.
 - **Benchmark precision**: Removed the detail list truncation cap in `benchmark_review.py`.
 
 ## v0.0.20 (unreleased)

@@ -166,6 +166,22 @@ def parse_args() -> argparse.Namespace:
 
 
 def trim_body(body: str) -> str:
+    """Extract the first meaningful text line from a comment body, stripping HTML/images."""
+    import re
+    text = body or ""
+    # Strip HTML tags
+    text = re.sub(r"<[^>]+>", " ", text)
+    # Strip markdown images ![...](...)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+    # Strip markdown image references
+    text = re.sub(r"<!--.*?-->", "", text)
+    # Collapse whitespace
+    text = re.sub(r"[ \t]+", " ", text)
+    for line in text.splitlines():
+        line = line.strip()
+        if line and len(line) > 5:
+            return line[:120]
+    # Fallback: first non-empty line of original
     lines = (body or "").splitlines()
     first_line = next(iter(lines), "").strip()
     return first_line[:120]
@@ -383,37 +399,37 @@ def run_slopgate(slug: str, worktree: WorktreeContext) -> tuple[dict[str, Any], 
 
 
 def collect_coderabbit_all(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    comments_raw = gh_api_json([f"repos/{owner_repo_name}/pulls/{pr_number}/comments", "--paginate"])
-    findings: list[ReviewFinding] = []
-    for item in comments_raw:
-        login = ((item.get("user") or {}).get("login") or "").lower()
-        if "coderabbit" not in login and "code-rabbit" not in login:
-            continue
-        line = item.get("line") or item.get("original_line")
-        path = item.get("path")
-        if not path or line is None:
-            continue
-        findings.append(
-            ReviewFinding(
-                path=path,
-                line=int(line),
-                body=trim_body(item.get("body", "")),
-                item_id=str(item.get("id", "")),
-                source="coderabbit_all",
-                meta={"resolved": None},
-            )
-        )
-    print(f"CodeRabbit: {len(findings)} review comments", file=sys.stderr)
-    return findings
+    return collect_bot_pr_comments(owner_repo_name, pr_number, "coderabbit", "coderabbit_all")
 
 
 def collect_sentry_pr_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
     """Collect Sentry bot review comments from GitHub PR review comments."""
+    return collect_bot_pr_comments(owner_repo_name, pr_number, "sentry[bot]", "sentry")
+
+
+def collect_gemini_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
+    """Collect Gemini Code Assist review comments from GitHub PR review comments."""
+    return collect_bot_pr_comments(owner_repo_name, pr_number, "gemini-code-assist[bot]", "gemini")
+
+
+def collect_deepsource_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
+    """Collect DeepSource review comments from GitHub PR review comments."""
+    return collect_bot_pr_comments(owner_repo_name, pr_number, "deepsource-io[bot]", "deepsource")
+
+
+def collect_bot_pr_comments(
+    owner_repo_name: str,
+    pr_number: int,
+    login_match: str,
+    source_name: str,
+) -> list[ReviewFinding]:
+    """Generic collector for bot PR review comments. Matches login by exact string or substring."""
     comments_raw = gh_api_json([f"repos/{owner_repo_name}/pulls/{pr_number}/comments", "--paginate"])
     findings: list[ReviewFinding] = []
     for item in comments_raw:
         login = ((item.get("user") or {}).get("login") or "").lower()
-        if login != "sentry[bot]":
+        match = login_match.lower()
+        if match not in login:
             continue
         line = item.get("line") or item.get("original_line")
         path = item.get("path")
@@ -425,11 +441,11 @@ def collect_sentry_pr_comments(owner_repo_name: str, pr_number: int) -> list[Rev
                 line=int(line),
                 body=trim_body(item.get("body", "")),
                 item_id=str(item.get("id", "")),
-                source="sentry",
+                source=source_name,
                 meta={"resolved": None},
             )
         )
-    print(f"Sentry PR:  {len(findings)} review comments", file=sys.stderr)
+    print(f"{source_name}: {len(findings)} review comments", file=sys.stderr)
     return findings
 
 
@@ -668,12 +684,16 @@ def build_tier_result(
     all_comments: list[ReviewFinding],
     actionable_comments: list[ReviewFinding],
     sentry_findings: list[ReviewFinding],
+    gemini_findings: list[ReviewFinding],
+    deepsource_findings: list[ReviewFinding],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
 ) -> dict[str, Any]:
     all_result = match_stream(sg_findings, all_comments, fuzzy_range)
     actionable_result = match_stream(sg_findings, actionable_comments, fuzzy_range)
     sentry_result = match_stream(sg_findings, sentry_findings, fuzzy_range)
+    gemini_result = match_stream(sg_findings, gemini_findings, fuzzy_range)
+    deepsource_result = match_stream(sg_findings, deepsource_findings, fuzzy_range)
     combined_result = match_stream(sg_findings, combined_actionable, fuzzy_range)
     return {
         "slopgate": summarize_slopgate_findings(sg_findings),
@@ -683,12 +703,16 @@ def build_tier_result(
             "coderabbit_all": {"total": len(all_comments)},
             "coderabbit_actionable": {"total": len(actionable_comments)},
             "sentry": {"total": len(sentry_findings)},
+            "gemini": {"total": len(gemini_findings)},
+            "deepsource": {"total": len(deepsource_findings)},
             "actionable_plus_sentry": {"total": len(combined_actionable)},
         },
         "comparison_streams": {
             "coderabbit_all": all_result,
             "coderabbit_actionable": actionable_result,
             "sentry": sentry_result,
+            "gemini": gemini_result,
+            "deepsource": deepsource_result,
             "actionable_plus_sentry": combined_result,
         },
         "overlap_details": all_result["overlap_details"],
@@ -697,6 +721,8 @@ def build_tier_result(
         "actionable_overlap_details": actionable_result["overlap_details"],
         "cr_actionable_only_details": actionable_result["review_only_details"],
         "sentry_only_details": sentry_result["review_only_details"],
+        "gemini_only_details": gemini_result["review_only_details"],
+        "deepsource_only_details": deepsource_result["review_only_details"],
         "actionable_plus_sentry_only_details": combined_result["review_only_details"],
     }
 
@@ -706,6 +732,8 @@ def build_benchmark_tiers(
     all_comments: list[ReviewFinding],
     actionable_comments: list[ReviewFinding],
     sentry_findings: list[ReviewFinding],
+    gemini_findings: list[ReviewFinding],
+    deepsource_findings: list[ReviewFinding],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
 ) -> dict[str, dict[str, Any]]:
@@ -717,6 +745,8 @@ def build_benchmark_tiers(
             all_comments,
             actionable_comments,
             sentry_findings,
+            gemini_findings,
+            deepsource_findings,
             combined_actionable,
             fuzzy_range,
         ),
@@ -725,6 +755,8 @@ def build_benchmark_tiers(
             all_comments,
             actionable_comments,
             sentry_findings,
+            gemini_findings,
+            deepsource_findings,
             combined_actionable,
             fuzzy_range,
         ),
@@ -733,6 +765,8 @@ def build_benchmark_tiers(
             all_comments,
             actionable_comments,
             sentry_findings,
+            gemini_findings,
+            deepsource_findings,
             combined_actionable,
             fuzzy_range,
         ),
@@ -744,6 +778,14 @@ def build_benchmark_metadata() -> dict[str, Any]:
         "default_mode_by_severity": BENCHMARK_MODE_BY_SEVERITY,
         "rule_mode_overrides": RULE_BENCHMARK_MODE_OVERRIDES,
         "tier_descriptions": BENCHMARK_TIER_DESCRIPTIONS,
+        "review_streams": {
+            "coderabbit_all": "All CodeRabbit PR review comments",
+            "coderabbit_actionable": "Unresolved CodeRabbit review threads (GraphQL)",
+            "sentry": "Sentry API issues + Sentry bot PR comments (deduplicated by location)",
+            "gemini": "Gemini Code Assist PR review comments",
+            "deepsource": "DeepSource PR review comments",
+            "actionable_plus_sentry": "Combined stream: actionable CR + Sentry + Gemini + DeepSource (deduplicated by location)",
+        },
     }
 
 
@@ -757,6 +799,8 @@ def build_result_payload(
     all_comments: list[ReviewFinding],
     actionable_comments: list[ReviewFinding],
     sentry_findings: list[ReviewFinding],
+    gemini_findings: list[ReviewFinding],
+    deepsource_findings: list[ReviewFinding],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
     slopgate_stderr: str,
@@ -767,6 +811,8 @@ def build_result_payload(
         all_comments,
         actionable_comments,
         sentry_findings,
+        gemini_findings,
+        deepsource_findings,
         combined_actionable,
         fuzzy_range,
     )
@@ -785,6 +831,8 @@ def build_result_payload(
         "coderabbit": {"total": len(all_comments)},
         "coderabbit_actionable": {"total": len(actionable_comments)},
         "sentry": {"total": len(sentry_findings)},
+        "gemini": {"total": len(gemini_findings)},
+        "deepsource": {"total": len(deepsource_findings)},
         "actionable_plus_sentry": {"total": len(combined_actionable)},
         "comparison": legacy_tier["comparison"],
         "scores": legacy_tier["scores"],
@@ -796,6 +844,8 @@ def build_result_payload(
         "actionable_overlap_details": legacy_tier["actionable_overlap_details"],
         "cr_actionable_only_details": legacy_tier["cr_actionable_only_details"],
         "sentry_only_details": legacy_tier["sentry_only_details"],
+        "gemini_only_details": legacy_tier["gemini_only_details"],
+        "deepsource_only_details": legacy_tier["deepsource_only_details"],
         "actionable_plus_sentry_only_details": legacy_tier["actionable_plus_sentry_only_details"],
         "benchmark_metadata": build_benchmark_metadata(),
         "benchmark_tiers": benchmark_tiers,
@@ -937,6 +987,8 @@ def main() -> int:
             context.worktree_path,
         )
         sentry_pr_findings = collect_sentry_pr_comments(slug, args.pr_number)
+        gemini_findings = collect_gemini_comments(slug, args.pr_number)
+        deepsource_findings = collect_deepsource_comments(slug, args.pr_number)
         # Merge Sentry API findings with Sentry GitHub bot comments, deduplicating by (path, line)
         sentry_by_location: dict[tuple[str, int], ReviewFinding] = {}
         for item in sentry_findings + sentry_pr_findings:
@@ -944,7 +996,9 @@ def main() -> int:
             if key not in sentry_by_location:
                 sentry_by_location[key] = item
         sentry_findings = list(sentry_by_location.values())
-        combined_actionable = combine_streams_by_location(actionable_comments + sentry_findings)
+        combined_actionable = combine_streams_by_location(
+            actionable_comments + sentry_findings + gemini_findings + deepsource_findings
+        )
         result = build_result_payload(
             slug=slug,
             pr_number=args.pr_number,
@@ -954,6 +1008,8 @@ def main() -> int:
             all_comments=all_comments,
             actionable_comments=actionable_comments,
             sentry_findings=sentry_findings,
+            gemini_findings=gemini_findings,
+            deepsource_findings=deepsource_findings,
             combined_actionable=combined_actionable,
             fuzzy_range=args.fuzzy_range,
             slopgate_stderr=slopgate_stderr,

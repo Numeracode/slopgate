@@ -3,11 +3,12 @@
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-BENCHMARK_DIR = Path("/srv/storage/shared/slopgate-benchmarks")
+BENCHMARK_DIR = Path(os.environ.get("SLOPGATE_BENCHMARK_DIR", "./benchmark-results"))
 DEFAULT_PHASES = ("postmerge", "prepush", "precommit")
 GH_PR_LIST_TIMEOUT_SECONDS = 30
 

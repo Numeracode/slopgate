@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_SLOPGATE_BIN = os.environ.get("SLOPGATE_BIN", "/srv/storage/shared/tools/bin/slopgate")
-DEFAULT_SENTRY_HELPER = os.environ.get("SLOPGATE_SENTRY_HELPER", "/srv/storage/shared/tools/bin/sentry-whimsy")
+DEFAULT_SLOPGATE_BIN = os.environ.get("SLOPGATE_BIN", "slopgate")
+DEFAULT_SENTRY_HELPER = os.environ.get("SLOPGATE_SENTRY_HELPER", "")
 DEFAULT_FUZZY_RANGE = int(os.environ.get("BENCHMARK_FUZZY_RANGE", "2"))
 GIT_HOOK_ENV_VARS = ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE", "GIT_PREFIX")
 BENCHMARK_MODE_BY_SEVERITY = {

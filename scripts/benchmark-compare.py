@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
-BENCHMARK_DIR = Path("/srv/storage/shared/slopgate-benchmarks")
+BENCHMARK_DIR = Path(os.environ.get("SLOPGATE_BENCHMARK_DIR", "./benchmark-results"))
 TIER_ORDER = ("all_rules", "block_warn_only", "benchmark_eligible")
 TIER_LABELS = {
     "all_rules": "All Rules",

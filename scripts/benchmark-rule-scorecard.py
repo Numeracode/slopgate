@@ -10,12 +10,13 @@ in the default gate, move to advisory/quarantine, or be disabled.
 import argparse
 import csv
 import json
+import os
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-BENCHMARK_DIR = Path("/srv/storage/shared/slopgate-benchmarks")
+BENCHMARK_DIR = Path(os.environ.get("SLOPGATE_BENCHMARK_DIR", "./benchmark-results"))
 PHASE_RANK = {
     "postmerge": 4,
     "prepush": 3,

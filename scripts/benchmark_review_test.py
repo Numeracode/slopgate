@@ -67,9 +67,9 @@ class ReviewCommentIngestionTest(unittest.TestCase):
         ]
 
         with patch.object(benchmark_review, "gh_api_json", return_value=comments) as gh_api_json:
-            findings = benchmark_review.collect_sentry_pr_comments("messagesgoel-blip/whimsy", 268)
+            findings = benchmark_review.collect_sentry_pr_comments("messagesgoel-blip/slopgate", 268)
 
-        gh_api_json.assert_called_once_with(["repos/messagesgoel-blip/whimsy/pulls/268/comments", "--paginate"])
+        gh_api_json.assert_called_once_with(["repos/messagesgoel-blip/slopgate/pulls/268/comments", "--paginate"])
         self.assertEqual(len(findings), 1)
         [finding] = findings
         self.assertEqual(finding.path, "api/src/app.js")

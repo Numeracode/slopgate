@@ -1,34 +1,28 @@
 # Changelog
 
-## v0.0.21 (unreleased)
+## v0.0.21 (2026-05-25)
+
+13 new rules and benchmark improvements:
 
 - **SLP068 / SLP113**: Quarantined to `info` severity to significantly reduce noise in benchmarks and scorecard evaluations.
 - **SLP126**: Made the migration foreign key check table-scoped to fix false negatives when multiple tables are modified in the same migration file.
+- **SLP143**: Environment variable accessed without validation or default value.
+- **SLP144**: Inconsistent error handling patterns in same file or route group.
+- **SLP145**: Hardcoded timeout value lacks contextual justification.
+- **SLP146**: Unawaited promise in loop or array iteration.
+- **SLP147**: Object destructuring from potentially undefined source without guard.
+- **SLP148**: Inconsistent naming for the same conceptual variable across modules. Tuned to scope to exported/module-boundary declarations.
+- **SLP151**: Orphaned test — flags a test that calls a function removed from a non-test source file.
+- **SLP152**: Unreachable code after an if/else chain whose every branch ends with a terminator.
 - **SLP155**: New rule checking for `ALTER TABLE ... ADD COLUMN ... NOT NULL` without a `DEFAULT` value.
 - **SLP156**: New rule catching redundant JS/TS double-guards checking both `=== null` and `=== undefined`.
 - **SLP208**: New rule catching TypeScript/JavaScript default parameters placed before required parameters.
 - **SLP209**: New rule catching async arrow functions that return on some paths but not all (missing return at end of body).
-- **Benchmark**: Added Gemini Code Assist and DeepSource as new review bot streams in benchmark_review.py.
-- **Benchmark precision**: Removed the detail list truncation cap in `benchmark_review.py`.
+- **Benchmark**: Added Gemini Code Assist, DeepSource, Qodo, and universal all-reviewers streams in benchmark_review.py.
+- **Benchmark**: Single API call fetches all PR review comments; bot-specific streams derived locally.
+- **Repo cleanup**: Removed committed binaries, internal paths, and stale artifacts for public release.
 
-## v0.0.20 (unreleased)
-
-- **SLP151**: orphaned test — flags a test that calls a function, method, or class which the same diff removed from a non-test source file.
-- **SLP152**: unreachable code after an if/else chain whose every branch (including a terminal else) ends with a terminator.
-- **SLP148** tuned: now scoped to exported / module-boundary declarations (JS/TS `export`, Go capitalised, Python public module-level) instead of every identifier, cutting noise on local-variable casing.
-
-## v0.0.19 (unreleased)
-
-6 new rules for enhanced bug detection:
-
-- **SLP143**: Environment variable accessed without validation or default value
-- **SLP144**: Inconsistent error handling patterns in same file or route group
-- **SLP145**: Hardcoded timeout value lacks contextual justification
-- **SLP146**: Unawaited promise in loop or array iteration
-- **SLP147**: Object destructuring from potentially undefined source without guard
-- **SLP148**: Inconsistent naming for the same conceptual variable across modules
-
-Total: 148 rules
+Total: 155 rules
 
 ## v0.0.18 (2026-05-02)
 

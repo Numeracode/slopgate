@@ -1,12 +1,18 @@
 /slopgate
+/slopgate_new
 /bin/
 *.test
 *.out
+*.pyc
+*.prof
+*.log
 __pycache__/
+.ruff_cache/
+dist/
 .DS_Store
 
-# Local git-hook symlinks installed by shared agent-toolkit.
+# Local git-hook symlinks.
 /.githooks/
 
-# Codero review gate artifacts (generated during pre-commit).
+# Review gate artifacts (generated during pre-commit).
 /.codero/

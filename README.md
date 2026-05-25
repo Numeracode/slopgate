@@ -47,6 +47,7 @@ slopgate --list-rules    # print the rule catalog
 | `--no-color` | Disable ANSI colour in text output |
 | `--config <path>` | Use a specific config file |
 | `--list-rules` | Print the rule catalog and exit |
+| `--min-severity info\|warn\|block` | Only report findings at or above this severity |
 
 `--staged` and `--base` are mutually exclusive.
 
@@ -104,14 +105,14 @@ With shallow clones, fetch full history (`fetch-depth: 0`) so the base ref resol
 
 ## Rules
 
-slopgate ships 153 registered rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
+slopgate ships 155 registered rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
 
 | Family | IDs | Focus |
 |---|---|---|
 | Core diff checks | `SLP001`–`SLP070` | test quality, code hygiene, safety, API and data smells |
 | Go AST checks | `SLP071`–`SLP080` | Go semantic hazards — nil, SQL injection, races, ignored errors |
 | Extended checks | `SLP081`–`SLP152` | framework, API, auth, audit, pagination, concurrency, dead-code, and test-completeness patterns |
-| Semantic bug checks | `SLP202`, `SLP203`, `SLP204`, `SLP205`, `SLP207` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order overrides, swallowed promise failures, missing rollbacks |
+| Semantic bug checks | `SLP202`–`SLP209` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order overrides, swallowed promise failures, missing rollbacks, default-param ordering, async arrow missing returns |
 
 Rules `SLP081` and `SLP033` handle React/TypeScript JSX import behavior for the modern automatic runtime. `SLP081` allows plain JSX without a `React` import, but still flags explicit `React.*` namespace usage unless the file imports `React` through a default or namespace binding. `SLP033` checks import availability using visible diff context and the file snapshot when the import sits outside the changed hunk.
 
@@ -134,7 +135,7 @@ Use the archived benchmark corpus to decide which rules should stay in the defau
 
 ```bash
 scripts/benchmark-rule-scorecard.py --limit 20 \
-  --output-dir /srv/storage/shared/slopgate-benchmarks/pruning-scorecard
+  --output-dir ./benchmark-results
 ```
 
 This writes `rule_scorecard.csv`, `pr_findings.csv`, `review_misses.csv`, and `pruning_candidates.md`. Review `rule_scorecard.csv` and set `manual_decision` consistently with scorecard outcomes such as `keep`, `watch`, `quarantine`, `disable_candidate`, or `review`.

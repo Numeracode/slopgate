@@ -417,6 +417,11 @@ def collect_deepsource_comments(owner_repo_name: str, pr_number: int) -> list[Re
     return collect_bot_pr_comments(owner_repo_name, pr_number, "deepsource-io[bot]", "deepsource")
 
 
+def collect_qodo_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
+    """Collect Qodo (formerly CodiumAI) review comments from GitHub PR review comments."""
+    return collect_bot_pr_comments(owner_repo_name, pr_number, "qodo-code-review[bot]", "qodo")
+
+
 def collect_bot_pr_comments(
     owner_repo_name: str,
     pr_number: int,
@@ -686,6 +691,7 @@ def build_tier_result(
     sentry_findings: list[ReviewFinding],
     gemini_findings: list[ReviewFinding],
     deepsource_findings: list[ReviewFinding],
+    qodo_findings: list[ReviewFinding],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
 ) -> dict[str, Any]:
@@ -694,6 +700,7 @@ def build_tier_result(
     sentry_result = match_stream(sg_findings, sentry_findings, fuzzy_range)
     gemini_result = match_stream(sg_findings, gemini_findings, fuzzy_range)
     deepsource_result = match_stream(sg_findings, deepsource_findings, fuzzy_range)
+    qodo_result = match_stream(sg_findings, qodo_findings, fuzzy_range)
     combined_result = match_stream(sg_findings, combined_actionable, fuzzy_range)
     return {
         "slopgate": summarize_slopgate_findings(sg_findings),
@@ -705,6 +712,7 @@ def build_tier_result(
             "sentry": {"total": len(sentry_findings)},
             "gemini": {"total": len(gemini_findings)},
             "deepsource": {"total": len(deepsource_findings)},
+            "qodo": {"total": len(qodo_findings)},
             "actionable_plus_sentry": {"total": len(combined_actionable)},
         },
         "comparison_streams": {
@@ -713,6 +721,7 @@ def build_tier_result(
             "sentry": sentry_result,
             "gemini": gemini_result,
             "deepsource": deepsource_result,
+            "qodo": qodo_result,
             "actionable_plus_sentry": combined_result,
         },
         "overlap_details": all_result["overlap_details"],
@@ -723,6 +732,7 @@ def build_tier_result(
         "sentry_only_details": sentry_result["review_only_details"],
         "gemini_only_details": gemini_result["review_only_details"],
         "deepsource_only_details": deepsource_result["review_only_details"],
+        "qodo_only_details": qodo_result["review_only_details"],
         "actionable_plus_sentry_only_details": combined_result["review_only_details"],
     }
 
@@ -734,42 +744,21 @@ def build_benchmark_tiers(
     sentry_findings: list[ReviewFinding],
     gemini_findings: list[ReviewFinding],
     deepsource_findings: list[ReviewFinding],
+    qodo_findings: list[ReviewFinding],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
 ) -> dict[str, dict[str, Any]]:
     block_warn_only = [f for f in sg_findings if f["severity"] in {"block", "warn"}]
     benchmark_eligible = [f for f in sg_findings if f["benchmark_eligible"]]
+    tier_args = lambda sg: (
+        sg, all_comments, actionable_comments, sentry_findings,
+        gemini_findings, deepsource_findings, qodo_findings,
+        combined_actionable, fuzzy_range,
+    )
     return {
-        "all_rules": build_tier_result(
-            sg_findings,
-            all_comments,
-            actionable_comments,
-            sentry_findings,
-            gemini_findings,
-            deepsource_findings,
-            combined_actionable,
-            fuzzy_range,
-        ),
-        "block_warn_only": build_tier_result(
-            block_warn_only,
-            all_comments,
-            actionable_comments,
-            sentry_findings,
-            gemini_findings,
-            deepsource_findings,
-            combined_actionable,
-            fuzzy_range,
-        ),
-        "benchmark_eligible": build_tier_result(
-            benchmark_eligible,
-            all_comments,
-            actionable_comments,
-            sentry_findings,
-            gemini_findings,
-            deepsource_findings,
-            combined_actionable,
-            fuzzy_range,
-        ),
+        "all_rules": build_tier_result(*tier_args(sg_findings)),
+        "block_warn_only": build_tier_result(*tier_args(block_warn_only)),
+        "benchmark_eligible": build_tier_result(*tier_args(benchmark_eligible)),
     }
 
 
@@ -784,7 +773,8 @@ def build_benchmark_metadata() -> dict[str, Any]:
             "sentry": "Sentry API issues + Sentry bot PR comments (deduplicated by location)",
             "gemini": "Gemini Code Assist PR review comments",
             "deepsource": "DeepSource PR review comments",
-            "actionable_plus_sentry": "Combined stream: actionable CR + Sentry + Gemini + DeepSource (deduplicated by location)",
+            "qodo": "Qodo (CodiumAI) PR review comments",
+            "actionable_plus_sentry": "Combined stream: actionable CR + Sentry + Gemini + DeepSource + Qodo (deduplicated by location)",
         },
     }
 
@@ -801,6 +791,7 @@ def build_result_payload(
     sentry_findings: list[ReviewFinding],
     gemini_findings: list[ReviewFinding],
     deepsource_findings: list[ReviewFinding],
+    qodo_findings: list[ReviewFinding],
     combined_actionable: list[ReviewFinding],
     fuzzy_range: int,
     slopgate_stderr: str,
@@ -813,6 +804,7 @@ def build_result_payload(
         sentry_findings,
         gemini_findings,
         deepsource_findings,
+        qodo_findings,
         combined_actionable,
         fuzzy_range,
     )
@@ -833,6 +825,7 @@ def build_result_payload(
         "sentry": {"total": len(sentry_findings)},
         "gemini": {"total": len(gemini_findings)},
         "deepsource": {"total": len(deepsource_findings)},
+        "qodo": {"total": len(qodo_findings)},
         "actionable_plus_sentry": {"total": len(combined_actionable)},
         "comparison": legacy_tier["comparison"],
         "scores": legacy_tier["scores"],
@@ -846,6 +839,7 @@ def build_result_payload(
         "sentry_only_details": legacy_tier["sentry_only_details"],
         "gemini_only_details": legacy_tier["gemini_only_details"],
         "deepsource_only_details": legacy_tier["deepsource_only_details"],
+        "qodo_only_details": legacy_tier["qodo_only_details"],
         "actionable_plus_sentry_only_details": legacy_tier["actionable_plus_sentry_only_details"],
         "benchmark_metadata": build_benchmark_metadata(),
         "benchmark_tiers": benchmark_tiers,
@@ -989,6 +983,7 @@ def main() -> int:
         sentry_pr_findings = collect_sentry_pr_comments(slug, args.pr_number)
         gemini_findings = collect_gemini_comments(slug, args.pr_number)
         deepsource_findings = collect_deepsource_comments(slug, args.pr_number)
+        qodo_findings = collect_qodo_comments(slug, args.pr_number)
         # Merge Sentry API findings with Sentry GitHub bot comments, deduplicating by (path, line)
         sentry_by_location: dict[tuple[str, int], ReviewFinding] = {}
         for item in sentry_findings + sentry_pr_findings:
@@ -997,7 +992,7 @@ def main() -> int:
                 sentry_by_location[key] = item
         sentry_findings = list(sentry_by_location.values())
         combined_actionable = combine_streams_by_location(
-            actionable_comments + sentry_findings + gemini_findings + deepsource_findings
+            actionable_comments + sentry_findings + gemini_findings + deepsource_findings + qodo_findings
         )
         result = build_result_payload(
             slug=slug,
@@ -1010,6 +1005,7 @@ def main() -> int:
             sentry_findings=sentry_findings,
             gemini_findings=gemini_findings,
             deepsource_findings=deepsource_findings,
+            qodo_findings=qodo_findings,
             combined_actionable=combined_actionable,
             fuzzy_range=args.fuzzy_range,
             slopgate_stderr=slopgate_stderr,

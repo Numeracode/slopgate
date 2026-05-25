@@ -88,6 +88,7 @@ def get_tier(data: dict[str, Any], tier_name: str) -> dict[str, Any] | None:
 
 def get_stream_total(data: dict[str, Any], stream_name: str) -> int:
     legacy_map = {
+        "all_reviewers": "all_reviewers",
         "coderabbit_all": "coderabbit",
         "coderabbit_actionable": "coderabbit_actionable",
         "sentry": "sentry",
@@ -117,7 +118,7 @@ def tier_metrics(data: dict[str, Any], tier_name: str) -> dict[str, Any] | None:
     scores = tier.get("scores", {})
     return {
         "slopgate_total": int(tier.get("slopgate", {}).get("total", 0)),
-        "review_total": get_stream_total(data, "coderabbit_all"),
+        "review_total": get_stream_total(data, "all_reviewers"),
         "overlap_all": int(scores.get("overlap_all", 0)),
         "coverage_all_pct": float(scores.get("coverage_all_pct", 0)),
         "precision_proxy_all_pct": float(scores.get("precision_proxy_all_pct", 0)),
@@ -158,12 +159,13 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
         return f"## {title}\n\nNo benchmarks found.\n"
 
     lines = [f"## {title}\n" if title else ""]
-    lines.append("| Repo | PR | CR | CR Act | Sentry | Gemini | DeepSrc | Qodo | Combined | All Rules | Block/Warn | Eligible |")
-    lines.append("|------|-----|-----|--------|--------|--------|---------|------|----------|-----------|------------|----------|")
+    lines.append("| Repo | PR | All Rev | CR | CR Act | Sentry | Gemini | DeepSrc | Qodo | Combined | All Rules | Block/Warn | Eligible |")
+    lines.append("|------|-----|---------|-----|--------|--------|--------|---------|------|----------|-----------|------------|----------|")
 
     for b in benchmarks:
         repo = b.get("repo", "?")
         pr = b.get("pr", "?")
+        all_rev = get_stream_total(b, "all_reviewers")
         cr = get_stream_total(b, "coderabbit_all")
         cr_act = get_stream_total(b, "coderabbit_actionable")
         sentry = get_stream_total(b, "sentry")
@@ -173,12 +175,13 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
         combined = get_stream_total(b, "actionable_plus_sentry")
 
         lines.append(
-            f"| {repo} | #{pr} | {cr} | {cr_act} | {sentry} | {gemini} | {deepsource} | {qodo} | {combined} | "
+            f"| {repo} | #{pr} | {all_rev} | {cr} | {cr_act} | {sentry} | {gemini} | {deepsource} | {qodo} | {combined} | "
             f"{format_tier_summary(b, 'all_rules')} | "
             f"{format_tier_summary(b, 'block_warn_only')} | "
             f"{format_tier_summary(b, 'benchmark_eligible')} |"
         )
 
+    total_all_rev = sum(get_stream_total(b, "all_reviewers") for b in benchmarks)
     total_cr = sum(get_stream_total(b, "coderabbit_all") for b in benchmarks)
     total_act = sum(get_stream_total(b, "coderabbit_actionable") for b in benchmarks)
     total_sentry = sum(get_stream_total(b, "sentry") for b in benchmarks)
@@ -201,7 +204,7 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
         )
 
     lines.append(
-        f"| **Total** | | **{total_cr}** | **{total_act}** | **{total_sentry}** | **{total_gemini}** | **{total_deepsource}** | **{total_qodo}** | **{total_combined}** | "
+        f"| **Total** | | **{total_all_rev}** | **{total_cr}** | **{total_act}** | **{total_sentry}** | **{total_gemini}** | **{total_deepsource}** | **{total_qodo}** | **{total_combined}** | "
         f"**{total_cell('all_rules')}** | "
         f"**{total_cell('block_warn_only')}** | "
         f"**{total_cell('benchmark_eligible')}** |"
@@ -249,6 +252,7 @@ def compare_files(file1: str, file2: str) -> str:
     lines.append("|--------|--------|-------|--------|")
 
     metrics: list[tuple[str, Any, Any]] = [
+        ("All Reviewers", get_stream_total(b1, "all_reviewers"), get_stream_total(b2, "all_reviewers")),
         ("CodeRabbit Total", get_stream_total(b1, "coderabbit_all"), get_stream_total(b2, "coderabbit_all")),
         ("CodeRabbit Actionable", get_stream_total(b1, "coderabbit_actionable"), get_stream_total(b2, "coderabbit_actionable")),
         ("Sentry Total", get_stream_total(b1, "sentry"), get_stream_total(b2, "sentry")),

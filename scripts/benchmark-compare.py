@@ -91,6 +91,9 @@ def get_stream_total(data: dict[str, Any], stream_name: str) -> int:
         "coderabbit_all": "coderabbit",
         "coderabbit_actionable": "coderabbit_actionable",
         "sentry": "sentry",
+        "gemini": "gemini",
+        "deepsource": "deepsource",
+        "qodo": "qodo",
         "actionable_plus_sentry": "actionable_plus_sentry",
     }
     streams = data.get("streams", {})
@@ -155,8 +158,8 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
         return f"## {title}\n\nNo benchmarks found.\n"
 
     lines = [f"## {title}\n" if title else ""]
-    lines.append("| Repo | PR | CodeRabbit | Actionable | Sentry | Combined | All Rules | Block/Warn | Eligible |")
-    lines.append("|------|-----|------------|------------|--------|----------|-----------|------------|----------|")
+    lines.append("| Repo | PR | CR | CR Act | Sentry | Gemini | DeepSrc | Qodo | Combined | All Rules | Block/Warn | Eligible |")
+    lines.append("|------|-----|-----|--------|--------|--------|---------|------|----------|-----------|------------|----------|")
 
     for b in benchmarks:
         repo = b.get("repo", "?")
@@ -164,10 +167,13 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
         cr = get_stream_total(b, "coderabbit_all")
         cr_act = get_stream_total(b, "coderabbit_actionable")
         sentry = get_stream_total(b, "sentry")
+        gemini = get_stream_total(b, "gemini")
+        deepsource = get_stream_total(b, "deepsource")
+        qodo = get_stream_total(b, "qodo")
         combined = get_stream_total(b, "actionable_plus_sentry")
 
         lines.append(
-            f"| {repo} | #{pr} | {cr} | {cr_act} | {sentry} | {combined} | "
+            f"| {repo} | #{pr} | {cr} | {cr_act} | {sentry} | {gemini} | {deepsource} | {qodo} | {combined} | "
             f"{format_tier_summary(b, 'all_rules')} | "
             f"{format_tier_summary(b, 'block_warn_only')} | "
             f"{format_tier_summary(b, 'benchmark_eligible')} |"
@@ -176,6 +182,9 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
     total_cr = sum(get_stream_total(b, "coderabbit_all") for b in benchmarks)
     total_act = sum(get_stream_total(b, "coderabbit_actionable") for b in benchmarks)
     total_sentry = sum(get_stream_total(b, "sentry") for b in benchmarks)
+    total_gemini = sum(get_stream_total(b, "gemini") for b in benchmarks)
+    total_deepsource = sum(get_stream_total(b, "deepsource") for b in benchmarks)
+    total_qodo = sum(get_stream_total(b, "qodo") for b in benchmarks)
     total_combined = sum(get_stream_total(b, "actionable_plus_sentry") for b in benchmarks)
 
     tier_totals = {tier_name: aggregate_tier_metrics(benchmarks, tier_name) for tier_name in TIER_ORDER}
@@ -192,7 +201,7 @@ def format_table(benchmarks: list[dict[str, Any]], title: str = "") -> str:
         )
 
     lines.append(
-        f"| **Total** | | **{total_cr}** | **{total_act}** | **{total_sentry}** | **{total_combined}** | "
+        f"| **Total** | | **{total_cr}** | **{total_act}** | **{total_sentry}** | **{total_gemini}** | **{total_deepsource}** | **{total_qodo}** | **{total_combined}** | "
         f"**{total_cell('all_rules')}** | "
         f"**{total_cell('block_warn_only')}** | "
         f"**{total_cell('benchmark_eligible')}** |"
@@ -243,10 +252,13 @@ def compare_files(file1: str, file2: str) -> str:
         ("CodeRabbit Total", get_stream_total(b1, "coderabbit_all"), get_stream_total(b2, "coderabbit_all")),
         ("CodeRabbit Actionable", get_stream_total(b1, "coderabbit_actionable"), get_stream_total(b2, "coderabbit_actionable")),
         ("Sentry Total", get_stream_total(b1, "sentry"), get_stream_total(b2, "sentry")),
-        ("Actionable+Sentry", get_stream_total(b1, "actionable_plus_sentry"), get_stream_total(b2, "actionable_plus_sentry")),
+        ("Gemini Total", get_stream_total(b1, "gemini"), get_stream_total(b2, "gemini")),
+        ("DeepSource Total", get_stream_total(b1, "deepsource"), get_stream_total(b2, "deepsource")),
+        ("Qodo Total", get_stream_total(b1, "qodo"), get_stream_total(b2, "qodo")),
+        ("Combined (all bots)", get_stream_total(b1, "actionable_plus_sentry"), get_stream_total(b2, "actionable_plus_sentry")),
         ("Overlap (actionable)", _get_nested(b1, "scores.overlap_actionable", 0), _get_nested(b2, "scores.overlap_actionable", 0)),
         (
-            "Overlap (actionable+sentry)",
+            "Overlap (combined)",
             _get_nested(b1, "scores.overlap_actionable_plus_sentry", 0),
             _get_nested(b2, "scores.overlap_actionable_plus_sentry", 0),
         ),

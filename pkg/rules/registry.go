@@ -169,5 +169,8 @@ func Default() *Registry {
 	r.Register(SLP205{})
 	// P1: Close Sentry bug gap — transaction missing explicit rollback.
 	r.Register(SLP207{})
+	// Close Gemini/DeepSource review gaps — JS/TS correctness.
+	r.Register(SLP208{}) // default parameter before required parameter
+	r.Register(SLP209{}) // async arrow missing return on some paths
 	return r
 }

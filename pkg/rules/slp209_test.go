@@ -121,6 +121,16 @@ func TestSLP209(t *testing.T) {
 			wantFire: false,
 		},
 		{
+			name: "single-line async arrow with return at end — no fire",
+			input: `diff --git a/src/api.js b/src/api.js
+--- a/src/api.js
++++ b/src/api.js
+@@ -0,0 +1,1 @@
++const f = async (x) => { return x }
+`,
+			wantFire: false,
+		},
+		{
 			name: "TypeScript file — fires",
 			input: `diff --git a/src/api.ts b/src/api.ts
 --- a/src/api.ts

@@ -30,10 +30,9 @@ func (SLP208) Description() string {
 	return "default parameter before required parameter — move defaults to the end"
 }
 
-// Matches function/arrow signatures with parameters.
-// We look for `=` inside params followed by a param without `=`.
-var slp208FuncSigRe = regexp.MustCompile(
-	`(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?)\(([^)]*)\)`)
+// Matches the start of a function/arrow signature up to the opening paren.
+var slp208FuncStartRe = regexp.MustCompile(
+	`(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?)\(`)
 
 // Matches a single parameter with a default value: `name = value`.
 var slp208DefaultParamRe = regexp.MustCompile(`\w+\s*=\s*[^,]+`)
@@ -67,15 +66,19 @@ func (r SLP208) Check(d *diff.Diff) []Finding {
 }
 
 func (r SLP208) checkLine(path string, ln diff.Line) *Finding {
-	matches := slp208FuncSigRe.FindStringSubmatch(ln.Content)
-	if len(matches) < 2 {
-		return nil
+	loc := slp208FuncStartRe.FindStringIndex(ln.Content)
+	if len(loc) > 1 {
+		start := loc[1] - 1
+		// Extract the balanced param list starting from the opening `(`.
+		params, ok := extractBalancedParens(ln.Content[start:])
+		if ok && params != "" {
+			return r.checkParams(path, ln, params)
+		}
 	}
-	params := matches[1]
-	if params == "" {
-		return nil
-	}
+	return nil
+}
 
+func (r SLP208) checkParams(path string, ln diff.Line, params string) *Finding {
 	// Split params by comma, respecting nested parens/brackets.
 	parts := splitParams(params)
 	if len(parts) < 2 {
@@ -112,6 +115,27 @@ func (r SLP208) checkLine(path string, ln diff.Line) *Finding {
 		}
 	}
 	return nil
+}
+
+// extractBalancedParens extracts the content between balanced parentheses
+// starting from an opening `(`. Returns the inner content and true if
+// balanced, or ("", false) if unbalanced.
+func extractBalancedParens(s string) (string, bool) {
+	if len(s) > 0 && s[0] == '(' {
+		depth := 0
+		for i, c := range s {
+			switch c {
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					return s[1:i], true
+				}
+			}
+		}
+	}
+	return "", false
 }
 
 // splitParams splits a parameter string by top-level commas.

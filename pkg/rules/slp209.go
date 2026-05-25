@@ -158,25 +158,44 @@ func (r SLP209) checkHunk(path string, h diff.Hunk) []Finding {
 func (r SLP209) collectBody(lines []diff.Line, startIdx int) ([]string, int) {
 	depth := 0
 	var body []string
+	entered := false
 	for i := startIdx; i < len(lines); i++ {
+		// Skip deleted lines — they don't appear in the new file.
+		if lines[i].Kind == diff.LineDelete {
+			continue
+		}
 		content := lines[i].Content
-		for _, c := range content {
+		firstOpen := -1
+		for j, c := range content {
 			switch c {
 			case '{':
 				depth++
+				if !entered {
+					entered = true
+					firstOpen = j
+				}
 			case '}':
 				depth--
 			}
 		}
-		if i > startIdx {
-			body = append(body, content)
+		if entered {
+			// For the opening line, extract only the content after `{`.
+			// For subsequent lines, include the full content.
+			if i == startIdx && firstOpen >= 0 && firstOpen+1 < len(content) {
+				body = append(body, content[firstOpen+1:])
+			} else if i > startIdx {
+				body = append(body, content)
+			}
 		}
-		if depth == 0 && i > startIdx {
+		if entered && depth == 0 {
 			return body, i
 		}
 	}
 	// If we hit the end without closing, still return what we have.
-	return body, len(lines) - 1
+	if len(lines) > 0 {
+		return body, len(lines) - 1
+	}
+	return body, 0
 }
 
 // lastStatement returns the last non-empty, non-brace-only line in the body.
@@ -187,6 +206,11 @@ func (r SLP209) lastStatement(body []string) string {
 			continue
 		}
 		if slp209CloseBraceRe.MatchString(trimmed) {
+			continue
+		}
+		// Strip trailing `}` from inline body (single-line functions).
+		trimmed = strings.TrimRight(trimmed, " }")
+		if trimmed == "" {
 			continue
 		}
 		return trimmed

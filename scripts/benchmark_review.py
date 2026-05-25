@@ -399,7 +399,7 @@ def run_slopgate(slug: str, worktree: WorktreeContext) -> tuple[dict[str, Any], 
 
 
 def collect_coderabbit_all(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
-    return collect_bot_pr_comments(owner_repo_name, pr_number, "coderabbit", "coderabbit_all")
+    return collect_bot_pr_comments(owner_repo_name, pr_number, ["coderabbit", "code-rabbit"], "coderabbit_all")
 
 
 def collect_sentry_pr_comments(owner_repo_name: str, pr_number: int) -> list[ReviewFinding]:
@@ -420,16 +420,16 @@ def collect_deepsource_comments(owner_repo_name: str, pr_number: int) -> list[Re
 def collect_bot_pr_comments(
     owner_repo_name: str,
     pr_number: int,
-    login_match: str,
+    login_match: str | list[str],
     source_name: str,
 ) -> list[ReviewFinding]:
     """Generic collector for bot PR review comments. Matches login by exact string or substring."""
     comments_raw = gh_api_json([f"repos/{owner_repo_name}/pulls/{pr_number}/comments", "--paginate"])
     findings: list[ReviewFinding] = []
+    matches = [login_match.lower()] if isinstance(login_match, str) else [m.lower() for m in login_match]
     for item in comments_raw:
         login = ((item.get("user") or {}).get("login") or "").lower()
-        match = login_match.lower()
-        if match not in login:
+        if not any(m in login for m in matches):
             continue
         line = item.get("line") or item.get("original_line")
         path = item.get("path")

@@ -2,10 +2,13 @@
 
 ## v0.0.23 (2026-05-28)
 
-Precision: stop false-positiving error-handler logging and JSX prose as SQL.
+Precision fixes + new parity rule.
 
 - **SLP014** (debug print) now skips `console.log/debug/trace`, `fmt.Println`, `print()`, etc. inside catch/except handlers. The catch-block detector walks back through the hunk counting braces (JS/TS/Go/Java/Rust) or compares indentation (Python). Real false positive observed on whimsy `useConnections.ts` where `console.debug('VPS connections fetch failed (non-fatal):', err)` was block-flagged inside a `} catch (err) {`. Regression-guarded: debug-prints outside a catch still fire, and Go's `if err != nil` is correctly NOT treated as a catch.
 - **SLP058** (SQL injection) split its case-insensitive regex into two passes. The default pattern now requires uppercase SQL keywords, matching the convention real SQL queries follow across the whimsy/codero corpora. Lowercase keywords still fire when the line or hunk shows a recognizable SQL execution context (`pool.query`, `cursor.execute`, `db.raw`, `client.prepare`, `knex`, `sqlx`, etc.). Real false positive observed on whimsy `BackupsPage.tsx:415` — an EmptyState `description` prop containing English prose with a lowercase preposition and a string concat operator was block-flagged as SQL because both tokens were on the same line. Existing pass-cases all preserved; 4 new precision tests cover JSX prose, plain-TS prose, lowercase SQL with `pool.query`, and the uppercase-in-`.ts` regression guard.
+- **SLP159**: subprocess call (`spawnSync` / `spawn` / `execSync` / `exec` / `execFileSync` / `execFile` / `fork`, plus Python `subprocess.Popen` / `subprocess.run` / `subprocess.call` / `check_call` / `check_output`) in a test file with no `timeout:` / `timeout=` option. A stalled child hangs the test worker until the workflow-level CI timeout fires, wasting the full run. Test-scoped only — production scripts often deliberately have no timeout. Suppresses when a timeout option appears within 5 lines of the call (covers multi-line options-object formatting) or when a spread of an options variable (`...opts`) might carry one. Severity: `warn`. Closes #87.
+
+Total: 148 rules
 
 ## v0.0.22 (2026-05-27)
 

@@ -161,6 +161,7 @@ func Default() *Registry {
 	r.Register(SLP156{}) // redundant null+undefined double-guard
 	r.Register(SLP157{}) // parseInt float truncation checker
 	r.Register(SLP158{}) // useEffect FOUC theme mutation checker
+	r.Register(SLP159{}) // subprocess call in test file without timeout
 	// P1: Close Sentry bug gap — null dereference guard.
 	r.Register(SLP202{})
 	// P1: Close Sentry bug gap — DB constraint violation.

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.23 (2026-05-28)
+
+Precision: stop false-positiving error-handler logging.
+
+- **SLP014** (debug print) now skips `console.log/debug/trace`, `fmt.Println`, `print()`, etc. inside catch/except handlers. The catch-block detector walks back through the hunk counting braces (JS/TS/Go/Java/Rust) or compares indentation (Python). Real false positive observed on whimsy `useConnections.ts` where `console.debug('VPS connections fetch failed (non-fatal):', err)` was block-flagged inside a `} catch (err) {`. Regression-guarded: debug-prints outside a catch still fire, and Go's `if err != nil` is correctly NOT treated as a catch.
+
 ## v0.0.22 (2026-05-27)
 
 Noise tuning wave plus 2 new precision rules:

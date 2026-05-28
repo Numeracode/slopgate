@@ -227,6 +227,122 @@ func TestSLP014_IgnoresConsoleWarnAndError(t *testing.T) {
 	}
 }
 
+func TestSLP014_IgnoresConsoleDebugInsideCatch_SameLineOpener(t *testing.T) {
+	// The original 2026-05-28 false positive on whimsy useConnections.ts:
+	// `console.debug('VPS connections fetch failed (non-fatal):', err)` inside a
+	// `} catch (err) {` block. Intentional error logging, not debug-print slop.
+	d := parseDiff(t, `diff --git a/app/src/hooks/useConnections.ts b/app/src/hooks/useConnections.ts
+--- a/app/src/hooks/useConnections.ts
++++ b/app/src/hooks/useConnections.ts
+@@ -10,5 +10,7 @@
+ async function loadVps() {
+   try {
+     return await fetchVps();
++  } catch (err) {
++    console.debug("VPS connections fetch failed (non-fatal):", err);
+   }
+ }
+`)
+	got := SLP014{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings (catch-block console.debug), got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP014_IgnoresConsoleLogInsideCatch_SplitLineOpener(t *testing.T) {
+	// `} catch (err)` on one line, `{` on the next — common formatter output.
+	d := parseDiff(t, `diff --git a/x.ts b/x.ts
+--- a/x.ts
++++ b/x.ts
+@@ -1,5 +1,8 @@
+ async function f() {
+   try { await x(); }
+   catch (err)
+   {
++    console.log("step failed:", err);
+   }
+ }
+`)
+	got := SLP014{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings (split-line catch opener), got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP014_FiresOnConsoleLogOutsideCatch(t *testing.T) {
+	// Regression guard: the catch-block suppression must not over-suppress.
+	// A debug-print in a plain function body still fires.
+	d := parseDiff(t, `diff --git a/x.ts b/x.ts
+--- a/x.ts
++++ b/x.ts
+@@ -1,5 +1,7 @@
+ export async function f() {
+   try { await x(); } catch (err) { console.error("boom", err); }
++  console.log("after the try — debugging");
+   return ok();
+ }
+`)
+	got := SLP014{}.Check(d)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 finding (debug-print after catch), got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP014_IgnoresPythonPrintInsideExcept(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc/app.py b/svc/app.py
+--- a/svc/app.py
++++ b/svc/app.py
+@@ -1,5 +1,7 @@
+ def handle(req):
+     try:
+         do_work(req)
+     except ValueError as err:
++        print("validation failed:", err)
+     return {"ok": True}
+`)
+	got := SLP014{}.Check(d)
+	if len(got) != 0 {
+		t.Fatalf("expected 0 findings (print inside except), got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP014_FiresOnPythonPrintOutsideExcept(t *testing.T) {
+	d := parseDiff(t, `diff --git a/svc/app.py b/svc/app.py
+--- a/svc/app.py
++++ b/svc/app.py
+@@ -1,3 +1,4 @@
+ def handle(req):
++    print("debug req:", req)
+     return {"ok": True}
+`)
+	got := SLP014{}.Check(d)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 finding (print outside except), got %d: %+v", len(got), got)
+	}
+}
+
+func TestSLP014_FiresOnGoFmtPrintlnOutsideCatch(t *testing.T) {
+	// Go doesn't have catch but uses if-err patterns. A fmt.Println in normal
+	// code still fires — the catch-block suppression must not affect Go's
+	// regular error-handling style.
+	d := parseDiff(t, `diff --git a/x.go b/x.go
+--- a/x.go
++++ b/x.go
+@@ -1,5 +1,6 @@
+ func Do() error {
+   if err := work(); err != nil {
++    fmt.Println("work failed:", err)
+     return err
+   }
+   return nil
+ }
+`)
+	got := SLP014{}.Check(d)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 finding (Go if-err is not a catch), got %d: %+v", len(got), got)
+	}
+}
+
 func TestSLP014_Description(t *testing.T) {
 	r := SLP014{}
 	if r.ID() != "SLP014" {

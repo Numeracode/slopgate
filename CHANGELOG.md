@@ -2,9 +2,10 @@
 
 ## v0.0.23 (2026-05-28)
 
-Precision: stop false-positiving error-handler logging.
+Precision: stop false-positiving error-handler logging and JSX prose as SQL.
 
 - **SLP014** (debug print) now skips `console.log/debug/trace`, `fmt.Println`, `print()`, etc. inside catch/except handlers. The catch-block detector walks back through the hunk counting braces (JS/TS/Go/Java/Rust) or compares indentation (Python). Real false positive observed on whimsy `useConnections.ts` where `console.debug('VPS connections fetch failed (non-fatal):', err)` was block-flagged inside a `} catch (err) {`. Regression-guarded: debug-prints outside a catch still fire, and Go's `if err != nil` is correctly NOT treated as a catch.
+- **SLP058** (SQL injection) split its case-insensitive regex into two passes. The default pattern now requires uppercase SQL keywords, matching the convention real SQL queries follow across the whimsy/codero corpora. Lowercase keywords still fire when the line or hunk shows a recognizable SQL execution context (`pool.query`, `cursor.execute`, `db.raw`, `client.prepare`, `knex`, `sqlx`, etc.). Real false positive observed on whimsy `BackupsPage.tsx:415` — an EmptyState `description` prop containing English prose with a lowercase preposition and a string concat operator was block-flagged as SQL because both tokens were on the same line. Existing pass-cases all preserved; 4 new precision tests cover JSX prose, plain-TS prose, lowercase SQL with `pool.query`, and the uppercase-in-`.ts` regression guard.
 
 ## v0.0.22 (2026-05-27)
 

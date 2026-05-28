@@ -27,8 +27,8 @@ func (SLP017) Description() string {
 // slp017Number matches decimal integer or float literals (not hex/octal).
 var slp017Number = regexp.MustCompile(`(?:^|[^\w.])((?:0|[1-9]\d*)(?:\.\d+)?)(?:[^\w.]|$)`)
 
-// slp017SmallNumber matches 0, 1, or 2 (common innocuous values).
-var slp017SmallNumber = regexp.MustCompile(`^(?:[012]|10|20|30|40|50|60|70|80|90|100|200|300|400|500|1000|2000|3000|4000|5000|10000)$`)
+// slp017SmallNumber matches common innocuous integer literals like 0-10 or powers/multiples of 10.
+var slp017SmallNumber = regexp.MustCompile(`^(?:[0-9]|10|20|30|40|50|60|70|80|90|100|200|300|400|500|1000|2000|3000|4000|5000|10000)$`)
 
 // slp017InnocuousFunction matches timer/wait-style function calls where numeric literals are often expected.
 var slp017InnocuousFunction = regexp.MustCompile(`(?i)\b(?:setTimeout|setInterval|delay|sleep|wait)\s*\(`)

@@ -195,8 +195,8 @@ func TestSLP017_MagicNumber(t *testing.T) {
 --- a/config/pricing.ts
 +++ b/config/pricing.ts
 @@ -1,2 +1,3 @@
-+export const pricingBucket = 7
-`,
++export const pricingBucket = 42
+ `,
 			want: 1,
 		},
 		{
@@ -351,14 +351,14 @@ func TestSLP017MixedLineUsesTokenContext(t *testing.T) {
 --- a/pricing.ts
 +++ b/pricing.ts
 @@ -1,2 +1,3 @@
-+const local = amount * 9; const taxRate = 7
++const local = amount * 9; const taxRate = 42
 `)
 	got := (SLP017{}).Check(d)
 	if len(got) != 1 {
 		t.Fatalf("got %d findings, want 1; findings: %v", len(got), got)
 	}
-	if !strings.Contains(got[0].Message, "magic number 7") {
-		t.Fatalf("got finding %q, want taxRate literal 7", got[0].Message)
+	if !strings.Contains(got[0].Message, "magic number 42") {
+		t.Fatalf("got finding %q, want taxRate literal 42", got[0].Message)
 	}
 }
 

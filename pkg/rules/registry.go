@@ -159,6 +159,8 @@ func Default() *Registry {
 	// Precision improvements: migration safety + JS null-guard noise.
 	r.Register(SLP155{}) // ADD COLUMN NOT NULL without DEFAULT
 	r.Register(SLP156{}) // redundant null+undefined double-guard
+	r.Register(SLP157{}) // parseInt float truncation checker
+	r.Register(SLP158{}) // useEffect FOUC theme mutation checker
 	// P1: Close Sentry bug gap — null dereference guard.
 	r.Register(SLP202{})
 	// P1: Close Sentry bug gap — DB constraint violation.

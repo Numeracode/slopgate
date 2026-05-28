@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.22 (2026-05-27)
+
+Noise tuning wave plus 2 new precision rules:
+
+- Tuned **SLP017** (magic numbers) to ignore innocuous numbers `0–10` (previously ignored only `0–2`) in business domain logic to reduce false-positive noise.
+- **SLP157**: `parseInt()` on request payload variables without float validation (flags float truncation bugs). Includes robust hunk-wide validation detection.
+- **SLP158**: Unsafe theme mutations inside React `useEffect` hooks that can cause a Flash of Unstyled Content (FOUC), recommending `useLayoutEffect`. Hardened with disk-backed file-wide `useEffect` scanner.
+
+Total: 157 rules
+
 ## v0.0.21 (2026-05-25)
 
 13 new rules and benchmark improvements:

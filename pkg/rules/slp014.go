@@ -233,29 +233,125 @@ func maskCommentAndStrings(s string) string {
 	return string(out)
 }
 
+// catchOpenerRe matches a JS/TS/Go/Java/Rust catch clause opener:
+//
+//	} catch (err) {       (same-line)
+//	catch (err) {         (after a } on the prior line)
+//	} catch {             (Java-style untyped catch — not Go-valid, but harmless)
+//	catch                 (multi-line — opening brace on next line)
+var catchOpenerRe = regexp.MustCompile(`\bcatch\s*[({]|\bcatch\s*$`)
+
+func indentWidth(s string) int {
+	n := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' || c == '\t' {
+			n++
+			continue
+		}
+		break
+	}
+	return n
+}
+
+// isInsideCatchHandler reports whether the line at idx within lines is
+// inside a JS/TS/Go/Java/Rust catch block (or a Python except clause).
+// Debug-print calls in catch handlers are almost always intentional error
+// logging (`console.debug('fetch failed (non-fatal):', err)`), not leftover
+// debugging output, so SLP014 should not fire on them.
+//
+// Brace-based languages: walk backwards counting braces. The first unmatched
+// `{` is the enclosing block's opener; if its line (or the previous non-blank
+// line for split `} catch (e)\n{`) carries the `catch` keyword, we're in a
+// catch handler. Python: walk back to the first line at strictly lower
+// indentation; if it starts with `except`, we're in an except clause.
+//
+// The walk is bounded by the hunk's own line slice — if the catch opener
+// is outside the hunk's context window, the rule will keep firing, which
+// is the safe degradation.
+func isInsideCatchHandler(lines []diff.Line, idx int, python bool) bool {
+	if python {
+		target := indentWidth(lines[idx].Content)
+		for j := idx - 1; j >= 0; j-- {
+			stripped := strings.TrimLeft(lines[j].Content, " \t")
+			if stripped == "" || strings.HasPrefix(stripped, "#") {
+				continue
+			}
+			if indentWidth(lines[j].Content) >= target {
+				continue
+			}
+			return strings.HasPrefix(stripped, "except")
+		}
+		return false
+	}
+	depth := 0
+	for j := idx - 1; j >= 0; j-- {
+		masked := maskCommentAndStrings(lines[j].Content)
+		for k := len(masked) - 1; k >= 0; k-- {
+			switch masked[k] {
+			case '}':
+				depth++
+			case '{':
+				if depth == 0 {
+					prefix := masked[:k]
+					if catchOpenerRe.MatchString(prefix) {
+						return true
+					}
+					if strings.TrimSpace(prefix) == "" {
+						for p := j - 1; p >= 0; p-- {
+							pmask := strings.TrimSpace(maskCommentAndStrings(lines[p].Content))
+							if pmask == "" {
+								continue
+							}
+							return catchOpenerRe.MatchString(pmask)
+						}
+					}
+					return false
+				}
+				depth--
+			}
+		}
+	}
+	return false
+}
+
 func (r SLP014) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	for _, f := range d.Files {
 		if f.IsDelete || isSuppressedDebugFile(f.Path) {
 			continue
 		}
-		for _, ln := range f.AddedLines() {
-			stripped := stripCommentAndStrings(ln.Content)
-			if stripped == "" {
-				continue
-			}
-			for _, p := range debugPrintPatterns {
-				if p.MatchString(stripped) {
-					out = append(out, Finding{
-						RuleID:   r.ID(),
-						Severity: r.DefaultSeverity(),
-						File:     f.Path,
-						Line:     ln.NewLineNo,
-						Message:  "debug print committed — delete before merge or move to real logging",
-						Snippet:  strings.TrimSpace(ln.Content),
-					})
-					break
+		isPy := strings.HasSuffix(strings.ToLower(f.Path), ".py")
+		for _, h := range f.Hunks {
+			for i, ln := range h.Lines {
+				if ln.Kind != diff.LineAdd {
+					continue
 				}
+				stripped := stripCommentAndStrings(ln.Content)
+				if stripped == "" {
+					continue
+				}
+				matched := false
+				for _, p := range debugPrintPatterns {
+					if p.MatchString(stripped) {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
+				}
+				if isInsideCatchHandler(h.Lines, i, isPy) {
+					continue
+				}
+				out = append(out, Finding{
+					RuleID:   r.ID(),
+					Severity: r.DefaultSeverity(),
+					File:     f.Path,
+					Line:     ln.NewLineNo,
+					Message:  "debug print committed — delete before merge or move to real logging",
+					Snippet:  strings.TrimSpace(ln.Content),
+				})
 			}
 		}
 	}

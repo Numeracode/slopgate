@@ -17,8 +17,10 @@ func (SLP161) Description() string {
 	return "trailing whitespace detected"
 }
 
-// slp161TrailingWS matches one or more whitespace characters at end of line.
-var slp161TrailingWS = regexp.MustCompile(`\s+$`)
+// slp161TrailingWS matches trailing whitespace (spaces or tabs) at end of line.
+// Uses [ \t] instead of \s to avoid matching \r on CRLF-ended lines,
+// which would cause false positives on Windows line endings.
+var slp161TrailingWS = regexp.MustCompile(`[ \t]+$`)
 
 func (r SLP161) Check(d *diff.Diff) []Finding {
 	var out []Finding

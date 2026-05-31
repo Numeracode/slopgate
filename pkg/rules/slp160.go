@@ -25,8 +25,9 @@ func (SLP160) Description() string {
 var slp160TodoPattern = regexp.MustCompile(`(?i)\b(TODO|FIXME|HACK)\b|XXX[\s:(]`)
 
 // slp160TicketRefPattern matches ticket references like SLOP-123 or CODE-456.
-// Reuses the same logic as the former slp035TicketReferencePattern.
-var slp160TicketRefPattern = regexp.MustCompile(`(?i)\b[A-Z]+-\d+\b`)
+// Requires uppercase letter prefix to avoid matching lowercase strings like
+// "fixme-123" which are not project ticket references.
+var slp160TicketRefPattern = regexp.MustCompile(`\b[A-Z]{2,}-\d+\b`)
 
 func (r SLP160) Check(d *diff.Diff) []Finding {
 	var out []Finding

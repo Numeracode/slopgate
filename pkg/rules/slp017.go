@@ -27,8 +27,11 @@ func (SLP017) Description() string {
 // slp017Number matches decimal integer or float literals (not hex/octal).
 var slp017Number = regexp.MustCompile(`(?:^|[^\w.])((?:0|[1-9]\d*)(?:\.\d+)?)(?:[^\w.]|$)`)
 
-// slp017SmallNumber matches common innocuous integer literals like 0-10 or powers/multiples of 10.
-var slp017SmallNumber = regexp.MustCompile(`^(?:[0-9]|10|20|30|40|50|60|70|80|90|100|200|300|400|500|1000|2000|3000|4000|5000|10000)$`)
+// slp017SmallNumber matches small or common innocuous integer literals.
+// 0-10 are almost always array indices, loop bounds, or trivial counts.
+// Multiples of 10 beyond 10 are NOT exempted — they are often meaningful
+// thresholds (80, 120, 200, etc.) that should be named constants.
+var slp017SmallNumber = regexp.MustCompile(`^(?:[0-9]|10|100|1000|10000)$`)
 
 // slp017InnocuousFunction matches timer/wait-style function calls where numeric literals are often expected.
 var slp017InnocuousFunction = regexp.MustCompile(`(?i)\b(?:setTimeout|setInterval|delay|sleep|wait)\s*\(`)
@@ -71,6 +74,15 @@ var slp017HexOctal = regexp.MustCompile(`0[xXoO][\da-fA-F]+`)
 
 // slp017ArrayIndex matches [N] where N is a literal number.
 var slp017ArrayIndex = regexp.MustCompile(`\[\d+\]`)
+
+// slp017ArrayMethod matches common array methods called with a numeric argument
+// (slice, at, splice, indexOf, lastIndexOf, with, fill, copyWithin).
+// Numeric arguments to these methods are indices/counts, not magic numbers.
+var slp017ArrayMethod = regexp.MustCompile(`(?i)\.(?:slice|at|splice|indexOf|lastIndexOf|with|fill|copyWithin)\s*\(`)
+
+// slp017TailwindUtility matches Tailwind CSS utility classes that contain numbers.
+// Numbers in utility classes like grid-cols-3, p-4, w-6 are design tokens, not magic numbers.
+var slp017TailwindUtility = regexp.MustCompile(`(?i)(?:grid-cols|col-span|gap|p[xtyb]|m[xtyb]|w-|h-|min-w|min-h|max-w|max-h|rounded|ring|shadow|border|space-[xy]|z-|opacity|scale|rotate|translate-[xy]|skew-[xy]|leading|tracking|inset|inset-[xy]|order|row-span|col-start|col-end|duration|delay|ease)-\d`)
 
 // slp017ConstDecl matches constant/define declarations.
 var slp017ConstDecl = regexp.MustCompile(`(?:^|\s)(?:const|final|static\s+final|#define)\s`)
@@ -170,6 +182,19 @@ func (r SLP017) Check(d *diff.Diff) []Finding {
 			}
 			// Blank out array index patterns so [3] doesn't count as magic.
 			clean = slp017ArrayIndex.ReplaceAllString(clean, "[_]")
+
+			// Skip lines containing Tailwind utility classes — numbers in
+			// classes like grid-cols-3, p-4, w-6 are design tokens, not magic numbers.
+			if slp017TailwindUtility.MatchString(ln.Content) {
+				continue
+			}
+
+			// Skip lines where the only numeric literals are arguments to
+			// common array methods (slice, at, splice, etc.) — those are
+			// indices/counts, not magic numbers.
+			if slp017ArrayMethod.MatchString(clean) {
+				continue
+			}
 
 			// Check for HTTP status context — exempt status codes.
 			isHTTPContext := slp017HTTPStatusContext.MatchString(clean)

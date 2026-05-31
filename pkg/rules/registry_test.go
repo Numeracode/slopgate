@@ -158,8 +158,8 @@ func TestDefault_RegistersAllV001Rules(t *testing.T) {
 func TestDefault_NoExtraRules(t *testing.T) {
 	r := Default()
 
-	// Includes SLP202-SLP205, SLP207, the P3 rules SLP151, SLP152, new precision rules SLP155, SLP156, SLP157, SLP158, and newly added SLP159.
-	wantCount := 148
+	// Includes SLP202-SLP205, SLP207, the P3 rules SLP151, SLP152, new precision rules SLP155-159, SLP035 split rules SLP160-162, and reviewer gap rules SLP210-214.
+	wantCount := 156
 	if got := len(r.All()); got != wantCount {
 		t.Errorf("Default registry has %d rules, want %d", got, wantCount)
 	}
@@ -188,6 +188,8 @@ func TestDefault_NoExtraRules(t *testing.T) {
 		"SLP151", "SLP152",
 		"SLP155", "SLP156",
 		"SLP157", "SLP158", "SLP159",
+		"SLP160", "SLP161", "SLP162",
+		"SLP210", "SLP211", "SLP212", "SLP213", "SLP214",
 		"SLP202",
 		"SLP203",
 		"SLP204",

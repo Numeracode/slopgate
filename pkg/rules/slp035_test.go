@@ -49,60 +49,6 @@ func TestSLP035(t *testing.T) {
 			wantFindings: 1,
 		},
 		{
-			name: "TODO without ticket reference",
-			input: &diff.Diff{
-				Files: []diff.File{
-					{
-						Path: "Component.tsx",
-						Hunks: []diff.Hunk{
-							{
-								Lines: []diff.Line{
-									{Kind: diff.LineAdd, NewLineNo: 1, Content: "// TODO: fix this later"},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantFindings: 1,
-		},
-		{
-			name: "TODO with ticket reference",
-			input: &diff.Diff{
-				Files: []diff.File{
-					{
-						Path: "Component.tsx",
-						Hunks: []diff.Hunk{
-							{
-								Lines: []diff.Line{
-									{Kind: diff.LineAdd, NewLineNo: 1, Content: "// TODO: CR-123 fix this later"},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantFindings: 0,
-		},
-		{
-			name: "Long line",
-			input: &diff.Diff{
-				Files: []diff.File{
-					{
-						Path: "Component.tsx",
-						Hunks: []diff.Hunk{
-							{
-								Lines: []diff.Line{
-									{Kind: diff.LineAdd, NewLineNo: 1, Content: "const reallyLongVariableNameThatExceedsTheRecommendedLengthLimitForCodeQualityAndReadabilityAndWouldBeHardToReviewInADiffBecauseItKeepsGoing = getValue();"},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantFindings: 1,
-		},
-		{
 			name: "Normal code without issues",
 			input: &diff.Diff{
 				Files: []diff.File{

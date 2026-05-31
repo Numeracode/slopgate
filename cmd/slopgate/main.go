@@ -80,10 +80,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if listRules {
 		reg := rules.Default()
 		for _, rule := range reg.All() {
-			fmt.Fprintf(stdout, "%s\t%s\t%s\n", rule.ID(), rule.DefaultSeverity(), rule.Description())
+			qMark := ""
+			if rules.IsQuarantined(rule.ID()) {
+				qMark = "\t[QUARANTINED]"
+			}
+			fmt.Fprintf(stdout, "%s\t%s\t%s%s\n", rule.ID(), rule.DefaultSeverity(), rule.Description(), qMark)
 		}
 		for _, rule := range reg.AllSemantic() {
-			fmt.Fprintf(stdout, "%s\t%s\t%s [AST]\n", rule.ID(), rule.DefaultSeverity(), rule.Description())
+			qMark := ""
+			if rules.IsQuarantined(rule.ID()) {
+				qMark = "\t[QUARANTINED]"
+			}
+			fmt.Fprintf(stdout, "%s\t%s\t%s [AST]%s\n", rule.ID(), rule.DefaultSeverity(), rule.Description(), qMark)
 		}
 		return 0
 	}

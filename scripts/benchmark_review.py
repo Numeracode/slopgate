@@ -35,6 +35,10 @@ RULE_BENCHMARK_MODE_OVERRIDES: dict[str, str] = {
     "SLP017": "advisory",
     "SLP035": "advisory",
     "SLP053": "advisory",
+    "SLP160": "advisory",  # TODO without ticket — low urgency
+    "SLP161": "advisory",  # trailing whitespace — lint-level
+    "SLP162": "advisory",  # long lines — formatter territory
+    "SLP213": "advisory",  # regex empty match — heuristic, may FP
 }
 BENCHMARK_TIER_DESCRIPTIONS = {
     "all_rules": "Every Slopgate finding, preserving legacy benchmark behavior.",
@@ -658,18 +662,18 @@ def summarize_slopgate_findings(sg_findings: list[dict[str, Any]]) -> dict[str, 
 
 
 def build_score_summary(
-    all_result: dict[str, Any],
+    all_reviewers_result: dict[str, Any],
     actionable_result: dict[str, Any],
     combined_result: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "overlap_all": all_result["comparison"]["overlap"],
+        "overlap_all": all_reviewers_result["comparison"]["overlap"],
         "overlap_actionable": actionable_result["comparison"]["overlap"],
         "overlap_actionable_plus_sentry": combined_result["comparison"]["overlap"],
-        "coverage_all_pct": all_result["coverage_pct"],
+        "coverage_all_pct": all_reviewers_result["coverage_pct"],
         "coverage_actionable_pct": actionable_result["coverage_pct"],
         "coverage_actionable_plus_sentry_pct": combined_result["coverage_pct"],
-        "precision_proxy_all_pct": all_result["precision_proxy_pct"],
+        "precision_proxy_all_pct": all_reviewers_result["precision_proxy_pct"],
         "precision_proxy_actionable_pct": actionable_result["precision_proxy_pct"],
         "precision_proxy_actionable_plus_sentry_pct": combined_result["precision_proxy_pct"],
     }
@@ -697,8 +701,8 @@ def build_tier_result(
     combined_result = match_stream(sg_findings, combined_actionable, fuzzy_range)
     return {
         "slopgate": summarize_slopgate_findings(sg_findings),
-        "comparison": all_result["comparison"],
-        "scores": build_score_summary(all_result, actionable_result, combined_result),
+        "comparison": all_reviewers_result["comparison"],
+        "scores": build_score_summary(all_reviewers_result, actionable_result, combined_result),
         "streams": {
             "all_reviewers": {"total": len(all_review_findings)},
             "coderabbit_all": {"total": len(all_comments)},
@@ -719,9 +723,9 @@ def build_tier_result(
             "qodo": qodo_result,
             "actionable_plus_sentry": combined_result,
         },
-        "overlap_details": all_result["overlap_details"],
-        "cr_only_details": all_result["review_only_details"],
-        "sg_only_details": all_result["sg_only_details"],
+        "overlap_details": all_reviewers_result["overlap_details"],
+        "cr_only_details": all_reviewers_result["review_only_details"],
+        "sg_only_details": all_reviewers_result["sg_only_details"],
         "actionable_overlap_details": actionable_result["overlap_details"],
         "cr_actionable_only_details": actionable_result["review_only_details"],
         "sentry_only_details": sentry_result["review_only_details"],
@@ -830,7 +834,7 @@ def build_result_payload(
         "deepsource": {"total": len(deepsource_findings)},
         "qodo": {"total": len(qodo_findings)},
         "actionable_plus_sentry": {"total": len(combined_actionable)},
-        "comparison": legacy_tier["comparison"],
+        "comparison": legacy_tier["comparison_streams"]["all_reviewers"]["comparison"],
         "scores": legacy_tier["scores"],
         "streams": legacy_tier["streams"],
         "comparison_streams": legacy_tier["comparison_streams"],

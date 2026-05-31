@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/messagesgoel-blip/slopgate/pkg/diff"
 )
@@ -36,13 +37,13 @@ func (r SLP162) Check(d *diff.Diff) []Finding {
 				if ln.Kind != diff.LineAdd {
 					continue
 				}
-				if len(ln.Content) > slp162MaxLineLen {
+				if utf8.RuneCountInString(ln.Content) > slp162MaxLineLen {
 					out = append(out, Finding{
 						RuleID:   r.ID(),
 						Severity: r.DefaultSeverity(),
 						File:     f.Path,
 						Line:     ln.NewLineNo,
-						Message:  fmt.Sprintf("line is too long (%d chars, limit %d) - consider breaking into multiple lines", len(ln.Content), slp162MaxLineLen),
+						Message:  fmt.Sprintf("line is too long (%d chars, limit %d) - consider breaking into multiple lines", utf8.RuneCountInString(ln.Content), slp162MaxLineLen),
 						Snippet:  ln.Content,
 					})
 				}

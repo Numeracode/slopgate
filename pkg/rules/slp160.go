@@ -19,9 +19,10 @@ func (SLP160) Description() string {
 }
 
 // slp160TodoPattern matches common task-marker keywords in comments.
+// Word boundaries prevent false positives on todoList, hackathon, etc.
 // XXX must be followed by a colon or parenthesized note to avoid matching
 // arbitrary lowercase "xxx" strings in code.
-var slp160TodoPattern = regexp.MustCompile(`(?i)(TODO|FIXME|HACK|XXX[\s:(])`)
+var slp160TodoPattern = regexp.MustCompile(`(?i)\b(TODO|FIXME|HACK)\b|XXX[\s:(]`)
 
 // slp160TicketRefPattern matches ticket references like SLOP-123 or CODE-456.
 // Reuses the same logic as the former slp035TicketReferencePattern.

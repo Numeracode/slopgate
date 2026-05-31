@@ -26,10 +26,6 @@ func (SLP213) Description() string {
 // slp213RegexStringRe matches common regex pattern declarations.
 var slp213RegexStringRe = regexp.MustCompile(`(?:new\s+RegExp|RegExp\(|/\^[^/]*\$/|Pattern\s*=\s*["'\x60])`)
 
-// slp213StarInSegmentRe matches `*` quantifiers after path separators or
-// at pattern boundaries where they can match empty strings.
-var slp213StarInSegmentRe = regexp.MustCompile(`[\\\/]\*\s*[\\\/]|[\\\/]\*\s*$|\(\*\)`)
-
 // slp213StarAfterSep matches `*` that comes right after a separator or anchor
 // where empty match is likely unintended.
 var slp213StarAfterSep = regexp.MustCompile(`(?:/|\\\\)\*`)

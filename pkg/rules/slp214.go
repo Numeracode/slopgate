@@ -32,6 +32,9 @@ var slp214DataAccessRe = regexp.MustCompile(`(\w+)\.data\b`)
 // slp214ErrorCheckRe checks for error handling patterns.
 var slp214ErrorCheckRe = regexp.MustCompile(`\.isError\b|\.error\b|\.status\s*===?\s*["']error["']|onError\b|if\s*\(.*error`)
 
+// slp214VarNameRe extracts the variable name from a declaration.
+var slp214VarNameRe = regexp.MustCompile(`(?:const|let|var)\s+(\w+)`)
+
 func (r SLP214) Check(d *diff.Diff) []Finding {
 	var out []Finding
 	for _, f := range d.Files {
@@ -47,8 +50,7 @@ func (r SLP214) Check(d *diff.Diff) []Finding {
 				matches := slp214QueryHookRe.FindStringSubmatch(ln.Content)
 				if len(matches) > 0 {
 					// Extract variable name: const xxx = useQuery(...)
-					varRe := regexp.MustCompile(`(?:const|let|var)\s+(\w+)`)
-					vm := varRe.FindStringSubmatch(ln.Content)
+					vm := slp214VarNameRe.FindStringSubmatch(ln.Content)
 					if len(vm) > 1 {
 						queryVars[vm[1]] = true
 					}

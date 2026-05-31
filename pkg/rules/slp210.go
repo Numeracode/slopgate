@@ -25,29 +25,19 @@ func (SLP210) Description() string {
 // tailwindPropertyPrefix maps Tailwind utility prefixes to the CSS property
 // category they control. Two utilities from the same category in one className
 // string indicate a conflict.
+//
+// Only properties where two values genuinely conflict are listed.
+// Complementary utilities (flex + flex-col, text-xs + font-bold) are NOT
+// listed because they target different sub-properties.
 var tailwindPropertyPrefix = map[string]string{
-	"text":    "font-color/size",
-	"font":    "font-family/weight",
-	"bg":      "background",
-	"border":  "border",
+	"text":    "font-color",
+	"bg":      "background-color",
 	"rounded": "border-radius",
-	"m":       "margin",
-	"p":       "padding",
-	"w":       "width",
-	"h":       "height",
-	"top":     "position-inset",
-	"right":   "position-inset",
-	"bottom":  "position-inset",
-	"left":    "position-inset",
-	"gap":     "gap",
-	"space":   "space",
-	"grid":    "grid",
-	"flex":    "flex",
 	"shadow":  "box-shadow",
 	"opacity": "opacity",
 	"z":       "z-index",
-	"ring":     "ring",
-	"outline":  "outline",
+	"ring":    "ring",
+	"outline": "outline",
 	"scale":   "transform-scale",
 	"rotate":  "transform-rotate",
 	"translate": "transform-translate",

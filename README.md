@@ -105,20 +105,26 @@ With shallow clones, fetch full history (`fetch-depth: 0`) so the base ref resol
 
 ## Rules
 
-slopgate ships 157 registered rules. `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, and description.
+slopgate ships 156 registered rules (10 quarantined). `slopgate --list-rules` prints the authoritative catalog with each rule's ID, severity, description, and quarantine status.
 
 | Family | IDs | Focus |
 |---|---|---|
 | Core diff checks | `SLP001`–`SLP070` | test quality, code hygiene, safety, API and data smells |
 | Go AST checks | `SLP071`–`SLP080` | Go semantic hazards — nil, SQL injection, races, ignored errors |
-| Extended checks | `SLP081`–`SLP158` | framework, API, auth, audit, pagination, concurrency, dead-code, test-completeness, parseInt float truncation, and useEffect FOUC theme mutation patterns |
-| Semantic bug checks | `SLP202`–`SLP209` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order overrides, swallowed promise failures, missing rollbacks, default-param ordering, async arrow missing returns |
+| Extended checks | `SLP081`–`SLP162` | framework, API, auth, audit, pagination, concurrency, dead-code, test-completeness, parseInt truncation, useEffect FOUC, code-quality splits (SLP160–162) |
+| Reviewer gap closure | `SLP210`–`SLP214` | conflicting Tailwind utilities, setState-before-async, double-submit race, regex empty-match, React Query no-error-check |
+| Semantic bug checks | `SLP202`–`SLP209` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order, swallowed promises, missing rollbacks, default-param ordering, async arrow missing returns |
 
-Rules `SLP081` and `SLP033` handle React/TypeScript JSX import behavior for the modern automatic runtime. `SLP081` allows plain JSX without a `React` import, but still flags explicit `React.*` namespace usage unless the file imports `React` through a default or namespace binding. `SLP033` checks import availability using visible diff context and the file snapshot when the import sits outside the changed hunk.
+### Quarantined rules
 
-`SLP017` magic-number findings are intentionally scoped to public API, configuration, and business-domain literals so incidental local arithmetic does not create review noise.
+Ten rules are quarantined (disabled by default) because they produced zero overlap with reviewer feedback across all benchmark runs. They can be re-enabled via config:
 
-`SLP157` catches float truncation risks by flagging direct `parseInt` calls on request payload parameters (`req.body`, `req.query`, etc.) without float validation. `SLP158` prevents visual Flash of Unstyled Content (FOUC) by catching unsafe document theme mutations inside standard React `useEffect` hooks, recommending `useLayoutEffect` instead.
+```toml
+[rules.SLP068]
+ignore = false   # re-enable a quarantined rule
+```
+
+Quarantined rules: `SLP010`, `SLP019`, `SLP007`, `SLP033`, `SLP053`, `SLP068`, `SLP081`, `SLP089`, `SLP113`, `SLP118`.
 
 ## Contributing
 

@@ -88,6 +88,34 @@ func NewRegistry() *Registry {
 	}
 }
 
+// notQuarantined is a convenience value for the default Quarantined() method.
+// Rules can embed this to satisfy the interface without writing their own method;
+// quarantined rules override Quarantined() to return true.
+type notQuarantined struct{}
+
+func (notQuarantined) Quarantined() bool { return false }
+
+// quarantinedRules is the set of rule IDs that are disabled by default because
+// they produced zero overlap with reviewer concerns across all benchmark runs.
+// These rules can be re-enabled by setting ignore = false in .slopgate.toml.
+var quarantinedRules = map[string]bool{
+	"SLP010": true, // no assertion in test lines — 0% overlap, 7 findings in 48h
+	"SLP019": true, // catch-block variable shadowing — 0% overlap, 7 findings in 48h
+	"SLP007": true, // loose equality check — 0% overlap, 5 findings in 48h
+	"SLP033": true, // useState hook without import — 0% overlap, 2 findings in 48h
+	"SLP068": true, // duplicate code block — 0% overlap, 101 findings in scorecard
+	"SLP089": true, // missing JSDoc — 0% overlap, 40 findings in scorecard
+	"SLP113": true, // source change without test — 0% overlap, 17 findings in scorecard
+	"SLP053": true, // config limit lacks rationale — 0% overlap, 13 findings in scorecard
+	"SLP118": true, // index access without guard — 0% overlap, 9 findings in scorecard
+	"SLP081": true, // JSX without React import — 0% overlap, 6 findings in scorecard
+}
+
+// IsQuarantined returns whether a rule is in the quarantine set.
+func IsQuarantined(ruleID string) bool {
+	return quarantinedRules[ruleID]
+}
+
 // Register adds a rule to the registry. Panics on duplicate ID to catch
 // configuration mistakes at startup rather than silently masking rules.
 func (r *Registry) Register(rule Rule) {
@@ -151,6 +179,20 @@ func (r *Registry) Run(d *diff.Diff, cfg *config.Config) []Finding {
 
 	// Run regex rules.
 	for _, rule := range r.rules {
+		// Skip quarantined rules unless config explicitly re-enables them.
+		if IsQuarantined(rule.ID()) {
+			if cfg == nil {
+				continue
+			}
+			if rc, ok := cfg.Rules[rule.ID()]; !ok || rc.Ignore {
+				// No config entry (still quarantined) or explicitly ignored.
+				continue
+			}
+			if rc, ok := cfg.Rules[rule.ID()]; ok && !rc.Ignore && rc.Severity == "off" {
+				continue
+			}
+			// Config has an entry with ignore=false: user re-enabled this rule.
+		}
 		// Check if rule is globally ignored via config.
 		if cfg != nil {
 			if rc, ok := cfg.Rules[rule.ID()]; ok && rc.Ignore {
@@ -203,6 +245,18 @@ func (r *Registry) Run(d *diff.Diff, cfg *config.Config) []Finding {
 		astResult := diff.LoadASTAnalysis(d)
 		if len(astResult.Files) > 0 {
 			for _, rule := range r.semantic {
+				// Skip quarantined rules unless config re-enables them.
+				if IsQuarantined(rule.ID()) {
+					if cfg == nil {
+						continue
+					}
+					if rc, ok := cfg.Rules[rule.ID()]; !ok || rc.Ignore {
+						continue
+					}
+					if rc, ok := cfg.Rules[rule.ID()]; ok && !rc.Ignore && rc.Severity == "off" {
+						continue
+					}
+				}
 				// Check if rule is globally ignored via config.
 				if cfg != nil {
 					if rc, ok := cfg.Rules[rule.ID()]; ok && rc.Ignore {

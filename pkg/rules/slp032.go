@@ -23,18 +23,17 @@ func (SLP032) Description() string {
 	return "React/TypeScript component may have type or accessibility issues"
 }
 
-// slp032ComponentPatterns matches React component patterns that might have issues.
-var slp032ComponentPatterns = []*regexp.Regexp{
-	// JSX element without proper React import
-	regexp.MustCompile(`(?s)<\w+\s+.*>\s*</\w+>|<\w+\s*/>`),
-	// Function component without React import
-	regexp.MustCompile(`(?i)export\s+function\s+\w+\s*\([^)]*\)\s*{`),
-	// Arrow function component without React import
-	regexp.MustCompile(`(?i)const\s+\w+\s*=\s*\([^)]*\)\s*=>\s*{`),
-	// useState without React import
-	regexp.MustCompile(`(?i)useState\s*\(|React\.useState\s*\(`),
-	// useEffect without React import
-	regexp.MustCompile(`(?i)useEffect\s*\(|React\.useEffect\s*\(`),
+// slp032HookPatterns matches React hooks that require an import from 'react'.
+// Modern React 17+ (automatic JSX transform) does not need `import React`,
+// so JSX/component patterns are no longer flagged as missing imports.
+// Only hooks that are used without any import from 'react' are real errors.
+var slp032HookPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\buseState\s*\(`),
+	regexp.MustCompile(`(?i)\buseEffect\s*\(`),
+	regexp.MustCompile(`(?i)\buseCallback\s*\(`),
+	regexp.MustCompile(`(?i)\buseMemo\s*\(`),
+	regexp.MustCompile(`(?i)\buseRef\s*\(`),
+	regexp.MustCompile(`(?i)\buseContext\s*\(`),
 }
 
 // slp032ButtonHasText matches buttons with visible text content between tags.
@@ -52,7 +51,10 @@ func (r SLP032) Check(d *diff.Diff) []Finding {
 			continue
 		}
 
-		// Check if React is imported (match "react" exactly, not react-router-dom etc.)
+		// Check if anything is imported from 'react' (default or destructured).
+		// Modern React 17+ with automatic JSX transform does not need
+		// `import React from 'react'`, so we only flag hooks that are used
+		// without ANY import from 'react'.
 		hasReactImport := false
 		for _, h := range f.Hunks {
 			for _, ln := range h.Lines {
@@ -77,9 +79,11 @@ func (r SLP032) Check(d *diff.Diff) []Finding {
 
 				content := ln.Content
 
-				// Check for React component patterns if React isn't imported
+				// Check for React hooks used without any import from 'react'.
+				// This is still a real error even with the automatic JSX transform,
+				// because hooks must be imported to be available in scope.
 				if !hasReactImport {
-					for _, pattern := range slp032ComponentPatterns {
+					for _, pattern := range slp032HookPatterns {
 						if pattern.MatchString(content) {
 							// Avoid flagging import statements themselves
 							if !strings.Contains(strings.ToLower(content), "import") {
@@ -88,7 +92,7 @@ func (r SLP032) Check(d *diff.Diff) []Finding {
 									Severity: r.DefaultSeverity(),
 									File:     f.Path,
 									Line:     ln.NewLineNo,
-									Message:  "React component detected without React import - add import React from 'react'",
+									Message:  "React hook used without import from 'react' - add import { useState, useEffect } from 'react'",
 									Snippet:  strings.TrimSpace(ln.Content),
 								})
 								break

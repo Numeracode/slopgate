@@ -175,5 +175,15 @@ func Default() *Registry {
 	// Close Gemini/DeepSource review gaps — JS/TS correctness.
 	r.Register(SLP208{}) // default parameter before required parameter
 	r.Register(SLP209{}) // async arrow missing return on some paths
+	// Precision split: SLP035 decomposed into focused sub-rules.
+	r.Register(SLP160{}) // TODO/FIXME comment without ticket reference
+	r.Register(SLP161{}) // trailing whitespace
+	r.Register(SLP162{}) // long lines (>180 chars)
+	// Reviewer gap closure: new rules targeting patterns reviewers flag but slopgate missed.
+	r.Register(SLP210{}) // conflicting Tailwind utilities
+	r.Register(SLP211{}) // setState clears data before async operation
+	r.Register(SLP212{}) // boolean state guard before async (double-submit risk)
+	r.Register(SLP213{}) // regex * quantifier may match empty string
+	r.Register(SLP214{}) // React Query data access without error check
 	return r
 }

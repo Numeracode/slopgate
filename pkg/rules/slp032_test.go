@@ -13,7 +13,7 @@ func TestSLP032(t *testing.T) {
 		wantFindings int
 	}{
 		{
-			name: "TSX component without React import",
+			name: "TSX component without React import (no hooks - not flagged in React 17+)",
 			input: &diff.Diff{
 				Files: []diff.File{
 					{
@@ -30,7 +30,7 @@ func TestSLP032(t *testing.T) {
 					},
 				},
 			},
-			wantFindings: 1,
+			wantFindings: 0,
 		},
 		{
 			name: "TSX with React import",
@@ -153,6 +153,26 @@ func TestSLP032(t *testing.T) {
 									{Kind: diff.LineAdd, NewLineNo: 1, Content: "import { Link } from 'react-router-dom';"},
 									{Kind: diff.LineAdd, NewLineNo: 2, Content: "export function MyComponent() {"},
 									{Kind: diff.LineAdd, NewLineNo: 3, Content: "  return <div>Hello</div>;"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFindings: 0,
+		},
+		{
+			name: "useState without React import",
+			input: &diff.Diff{
+				Files: []diff.File{
+					{
+						Path: "Component.tsx",
+						Hunks: []diff.Hunk{
+							{
+								Lines: []diff.Line{
+									{Kind: diff.LineAdd, NewLineNo: 1, Content: "import { Link } from 'react-router-dom';"},
+									{Kind: diff.LineAdd, NewLineNo: 2, Content: "export function MyComponent() {"},
+									{Kind: diff.LineAdd, NewLineNo: 3, Content: "  const [val, setVal] = useState(0);"},
 								},
 							},
 						},

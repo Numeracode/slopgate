@@ -190,5 +190,9 @@ func Default() *Registry {
 	r.Register(SLP216{}) // error logging uses err.message instead of full error object
 	r.Register(SLP217{}) // path-like parameter not validated for empty input
 	r.Register(SLP218{}) // ContentLength gate without Transfer-Encoding handling
+	r.Register(SLP219{}) // concurrent access to shared state field without lock
+	r.Register(SLP220{}) // filepath.Walk without context cancellation check
+	r.Register(SLP221{}) // exec.Command without capturing stderr on failure
+	r.Register(SLP222{}) // treating UTF-16/BOM data as UTF-8 without decoding
 	return r
 }

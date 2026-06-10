@@ -112,7 +112,7 @@ slopgate ships 156 registered rules (10 quarantined). `slopgate --list-rules` pr
 | Core diff checks | `SLP001`–`SLP070` | test quality, code hygiene, safety, API and data smells |
 | Go AST checks | `SLP071`–`SLP080` | Go semantic hazards — nil, SQL injection, races, ignored errors |
 | Extended checks | `SLP081`–`SLP162` | framework, API, auth, audit, pagination, concurrency, dead-code, test-completeness, parseInt truncation, useEffect FOUC, code-quality splits (SLP160–162) |
-| Reviewer gap closure | `SLP210`–`SLP214` | conflicting Tailwind utilities, setState-before-async, double-submit race, regex empty-match, React Query no-error-check |
+| Reviewer gap closure | `SLP210`–`SLP218` | conflicting Tailwind utilities, setState-before-async, double-submit race, regex empty-match, React Query no-error-check, OpenAPI spec drift, shallow error logging, empty path params, missing chunked transfer handling |
 | Semantic bug checks | `SLP202`–`SLP209` | high-signal runtime bugs — nil dereference, DB constraints, OpenAPI merge-order, swallowed promises, missing rollbacks, default-param ordering, async arrow missing returns |
 
 ### Quarantined rules

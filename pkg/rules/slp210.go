@@ -30,20 +30,20 @@ func (SLP210) Description() string {
 // Complementary utilities (flex + flex-col, text-xs + font-bold) are NOT
 // listed because they target different sub-properties.
 var tailwindPropertyPrefix = map[string]string{
-	"text":    "font-color",
-	"bg":      "background-color",
-	"rounded": "border-radius",
-	"shadow":  "box-shadow",
-	"opacity": "opacity",
-	"z":       "z-index",
-	"ring":    "ring",
-	"outline": "outline",
-	"scale":   "transform-scale",
-	"rotate":  "transform-rotate",
+	"text":      "font-color",
+	"bg":        "background-color",
+	"rounded":   "border-radius",
+	"shadow":    "box-shadow",
+	"opacity":   "opacity",
+	"z":         "z-index",
+	"ring":      "ring",
+	"outline":   "outline",
+	"scale":     "transform-scale",
+	"rotate":    "transform-rotate",
 	"translate": "transform-translate",
-	"skew":    "transform-skew",
-	"overflow": "overflow",
-	"cursor":  "cursor",
+	"skew":      "transform-skew",
+	"overflow":  "overflow",
+	"cursor":    "cursor",
 }
 
 // slp210ClassNameRe matches className={...} or className="..." patterns.

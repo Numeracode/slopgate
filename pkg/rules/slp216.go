@@ -13,10 +13,13 @@ import (
 // much harder to diagnose.
 //
 // Reviewer pattern (whimsy PR #1968, reviewer: CodeRabbit/Qodo):
-//   logger.error('refresh failed:', err.message)
+//
+//	logger.error('refresh failed:', err.message)
+//
 // vs. preferred:
-//   logger.error('refresh failed:', err)
-//   logger.error({ err }, 'refresh failed')
+//
+//	logger.error('refresh failed:', err)
+//	logger.error({ err }, 'refresh failed')
 //
 // Heuristic:
 //   - JS/TS file (non-test)

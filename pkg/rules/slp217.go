@@ -36,7 +36,8 @@ func (SLP217) Description() string {
 
 // goFuncParamRe captures Go function definitions with their parameter list.
 // Matches: func Foo(sourceRoot, remoteDest string) and
-//          func (r *Runner) Do(destDir string) { ... }
+//
+//	func (r *Runner) Do(destDir string) { ... }
 var goFuncParamRe = regexp.MustCompile(`(?m)^\s*func\s+(?:\([^)]+\)\s+)?\w+\s*\(([^)]*)\)`)
 
 // jsFuncParamRe captures JS/TS named function or arrow function definitions

@@ -7,23 +7,19 @@ import (
 	"github.com/messagesgoel-blip/slopgate/pkg/diff"
 )
 
-// SLP216 flags shallow error logging: `catch(err)` blocks that log only
-// `err.message` or `err.code` instead of the full error object. The stack
+// SLP216 flags shallow error logging: catch(err) blocks that log only
+// err.message or err.code instead of the full error object. The stack
 // trace and nested cause are lost in production logs, making incidents
 // much harder to diagnose.
 //
 // Reviewer pattern (whimsy PR #1968, reviewer: CodeRabbit/Qodo):
-//
-//	logger.error('refresh failed:', err.message)
-//
-// vs. preferred:
-//
-//	logger.error('refresh failed:', err)
-//	logger.error({ err }, 'refresh failed')
+// the bad form writes logger.error('msg:', err.message), which discards
+// the stack; the good form passes the err object directly or wraps it
+// in logger.error({err}, 'msg') so both stack and cause survive.
 //
 // Heuristic:
 //   - JS/TS file (non-test)
-//   - Added line contains a logging call (console.*|logger.*|log(.*|slog(.*).*)
+//   - Added line contains a logging call (console.*|logger.*|log|slog|pino|winston|bunyan|console)
 //   - AND that line references err.message, err.code, err.name, error.message
 //     — but NOT the err object itself in a spread or as a second arg.
 type SLP216 struct{}

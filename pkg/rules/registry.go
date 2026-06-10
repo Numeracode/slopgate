@@ -185,5 +185,10 @@ func Default() *Registry {
 	r.Register(SLP212{}) // boolean state guard before async (double-submit risk)
 	r.Register(SLP213{}) // regex * quantifier may match empty string
 	r.Register(SLP214{}) // React Query data access without error check
+	// Reviewer gap closure v2: high-impact patterns from whimsy PR benchmarks.
+	r.Register(SLP215{}) // API handler changed without updating OpenAPI contract
+	r.Register(SLP216{}) // error logging uses err.message instead of full error object
+	r.Register(SLP217{}) // path-like parameter not validated for empty input
+	r.Register(SLP218{}) // ContentLength gate without Transfer-Encoding handling
 	return r
 }

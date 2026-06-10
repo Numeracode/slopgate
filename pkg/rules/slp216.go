@@ -13,10 +13,9 @@ import (
 // much harder to diagnose.
 //
 // Reviewer pattern (whimsy PR #1968, reviewer: CodeRabbit/Qodo):
-//   logger.error('refresh failed:', err.message)
-// vs. preferred:
-//   logger.error('refresh failed:', err)
-//   logger.error({ err }, 'refresh failed')
+// The bad pattern is `logger.error('refresh failed:', err.message)` which
+// discards the stack. The preferred pattern is `logger.error('refresh failed:', err)`
+// or `logger.error({ err }, 'refresh failed')` which preserve the full error context.
 //
 // Heuristic:
 //   - JS/TS file (non-test)

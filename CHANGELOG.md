@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.0.25 (2026-06-10)
+
+Reviewer gap closure v2 + v3 — 8 new rules targeting recurring reviewer-only findings across 10 whimsy PR benchmarks. PRs #90, #91.
+
+- **SLP215**: OpenAPI/spec drift — flags changes to API endpoints or response shapes without corresponding OpenAPI/spec updates in the same hunk. Severity: `warn`.
+- **SLP216**: Shallow error logging — catches `logger.error('msg', err.message)` / `err.code` / `err.name` where the full error object (and thus the stack trace and cause chain) is discarded. Severity: `warn`.
+- **SLP217**: Path parameter without empty-input check — flags newly-added functions whose path/dir/dest/root parameters are not validated for empty or whitespace-only input in the introducing hunk. Severity: `warn`.
+- **SLP218**: ContentLength gate missing chunked transfer — flags `r.ContentLength > 0` checks that don't also guard `r.TransferEncoding`, so chunked uploads silently skip the decode path. Severity: `warn`.
+- **SLP219**: Data race on shared state field — flags HTTP handlers that read/write a struct field without a mutex or atomic, when the field is also accessed from a handler reachable via another route. Severity: `block`.
+- **SLP220**: `filepath.Walk` / `filepath.WalkDir` without context cancellation — the callback never checks `ctx.Err()`, so cancelling the request cannot abort a deep tree walk. Severity: `warn`.
+- **SLP221**: `exec.Command` / `exec.CommandContext` without stderr capture — subprocess failures are opaque because neither `.Stderr` nor `.StderrPipe` is wired before `.Run` / `.Output` / `.CombinedOutput`. Severity: `warn`.
+- **SLP222**: UTF-16 / BOM output treated as UTF-8 — `wmic` (and similar Windows tools) emit UTF-16LE-with-BOM, but the code reads it as plain bytes without decoding. Severity: `block`.
+
+15 new tests, registry count bumped to **164**, README family row extended to `SLP210`–`SLP222`. Benchmark run re-extended to cover SLP215-222 in `slp215-218-bench3.py`.
+
+Total: 164 rules
+
 ## v0.0.23 (2026-05-28)
 
 Precision fixes + new parity rule.

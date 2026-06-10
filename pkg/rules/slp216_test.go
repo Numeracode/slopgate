@@ -52,7 +52,7 @@ func TestSLP216_NoWarningWhenErrorInterpolated(t *testing.T) {
    try {
      await doUpload()
    } catch (err) {
-+    logger.error(` + "`" + `upload failed: ${err}` + "`" + `)
++    logger.error(`+"`"+`upload failed: ${err}`+"`"+`)
    }
  }
 `)

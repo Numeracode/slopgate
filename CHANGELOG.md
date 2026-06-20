@@ -1,6 +1,15 @@
 # Changelog
 
-## v0.0.25 (2026-06-10)
+## v0.0.26 (2026-06-20)
+
+Rule curation — retired 7 noisy rules, consolidated 4 overlapping ignored-error rules into SLP223, narrowed SLP227, fixed 12 review bot comments. PR #92.
+
+- **Retired** (build-tagged `ignore_retired`): SLP043 (duplicate JSON key — 244 findings, 1 bug), SLP050 (param validation — 175 findings, 0 bugs), SLP055 (comment heuristic — 45 findings, 0 bugs). All 3 had <5% useful findings on the Whimsy 15-day benchmark.
+- **Consolidated into SLP223**: SLP044 (`_ = err`), SLP065 (generic ignored error), SLP114 (error-return called as statement), SLP120 (discarded `_ =`). SLP223 now covers these with targeted error-type patterns (Close, Remove, MarkRun\*, etc.) and safe-defer encoder exclusions.
+- **Narrowed SLP227**: Excluded strings <6 chars and HTTP method literals (was flagging "GET", "POST", "run", "config" in test helpers and OpenAPI code — 17 of 18 findings were noise).
+- **Bug fixes**: Rewrote `inDeferredFunc` forward-depth stack (was backward brace counting), fixed `goroutineEnd` inBody/single-line goroutines, moved sync guard to per-goroutine scope, removed QueryRow/QueryRowContext from SQL resource regex, added method receiver support to handler regex, full-hunk guard scanning, compiled validation regex once per call, replaced string.Contains with word-boundary regex for non-gating ContentLength checks.
+
+Total: 162 rules
 
 Reviewer gap closure v2 + v3 — 8 new rules targeting recurring reviewer-only findings across 10 whimsy PR benchmarks. PRs #90, #91.
 

@@ -53,30 +53,35 @@ func callName(expr string) string {
 }
 
 // inDeferredFunc returns true if the current line appears inside a `defer
-// func() { ... }()` closure within the added hunk. It scans the added lines
-// from the beginning up to idx.
+// func() { ... }()` closure within the added hunk. It scans forward from the
+// beginning of the hunk to idx, tracking brace depth with a stack of defer
+// entry depths. A defer func is "active" while the depth exceeds the depth
+// at which it was entered.
 func inDeferredFunc(hunk []diff.Line, idx int) bool {
-	// Walk backwards from the line within the hunk to find the `defer func() {`
-	// that contains it. We use simple brace counting, considering both added
-	// and context lines because the closure start may not be added in this hunk.
 	depth := 0
-	for i := idx; i >= 0; i-- {
-		ln := hunk[i]
-		content := ln.Content
-		openBraces := strings.Count(content, "{")
-		closeBraces := strings.Count(content, "}")
+	var deferDepths []int
 
-		if i == idx {
-			openBraces = 0
-		}
+	for i := 0; i <= idx; i++ {
+		content := hunk[i].Content
+		open := strings.Count(content, "{")
+		close := strings.Count(content, "}")
+
 		if deferredFuncStartRe.MatchString(content) {
-			openBraces--
-			depth += openBraces - closeBraces
-			return depth >= 0
+			// depth before this line's brace opens — this is the level
+			// at which the defer func is entered.
+			deferDepths = append(deferDepths, depth)
 		}
-		depth += openBraces - closeBraces
+
+		depth += open - close
+
+		// Pop any deferred funcs that have been closed (depth returned to
+		// or below the entry level).
+		for len(deferDepths) > 0 && depth <= deferDepths[len(deferDepths)-1] {
+			deferDepths = deferDepths[:len(deferDepths)-1]
+		}
 	}
-	return false
+
+	return len(deferDepths) > 0
 }
 
 func (r SLP223) Check(d *diff.Diff) []Finding {

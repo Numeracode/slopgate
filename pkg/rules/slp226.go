@@ -35,7 +35,7 @@ func (SLP226) Description() string {
 
 // sqlVarRe matches `rows, err := db.Query(...)`, `stmt, err := db.Prepare(...)`,
 // and single-return variants. Group 1 and 3 are the variable names.
-var sqlVarRe = regexp.MustCompile(`(?m)(\w+)\s*,\s*\w*\s*:=\s*(?:[A-Za-z0-9_.]+\.)?(Query|QueryContext|QueryRow|QueryRowContext|Prepare|PrepareContext|Begin|BeginTx)\(|(\w+)\s*:=\s*(?:[A-Za-z0-9_.]+\.)?(Query|QueryContext|QueryRow|QueryRowContext|Prepare|PrepareContext|Begin|BeginTx)\(`)
+var sqlVarRe = regexp.MustCompile(`(?m)(\w+)\s*,\s*\w*\s*:=\s*(?:[A-Za-z0-9_.]+\.)?(Query|QueryContext|Prepare|PrepareContext|Begin|BeginTx)\(|(\w+)\s*:=\s*(?:[A-Za-z0-9_.]+\.)?(Query|QueryContext|Prepare|PrepareContext|Begin|BeginTx)\(`)
 
 // closeCallRe matches defer rows.Close() / defer stmt.Close() for a given var.
 var closeCallRe = regexp.MustCompile(`defer\s+%s\.Close\(\s*\)`)
@@ -55,12 +55,14 @@ func (r SLP226) Check(d *diff.Diff) []Finding {
 
 		for _, h := range f.Hunks {
 			hunkText := ""
+			addedText := ""
 			var added []diff.Line
 			for _, ln := range h.Lines {
 				if ln.Kind == diff.LineAdd || ln.Kind == diff.LineContext {
 					hunkText += ln.Content + "\n"
 				}
 				if ln.Kind == diff.LineAdd {
+					addedText += ln.Content + "\n"
 					added = append(added, ln)
 				}
 			}
@@ -68,7 +70,10 @@ func (r SLP226) Check(d *diff.Diff) []Finding {
 				continue
 			}
 
-			vars := collectSQLVars(sqlVarRe, hunkText)
+			// Only scan added lines for SQL variable assignments to avoid
+			// flagging pre-existing resources that were not introduced by
+			// this diff.
+			vars := collectSQLVars(sqlVarRe, addedText)
 			for _, v := range vars {
 				// Determine whether this is a rows/stmt or a transaction.
 				isTx := false

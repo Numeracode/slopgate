@@ -35,7 +35,7 @@ func (SLP224) Description() string {
 }
 
 // handlerSigRe matches Go HTTP handler signatures with `*http.Request`.
-var handlerSigRe = regexp.MustCompile(`func\s+\w+\s*\([^)]*\*http\.Request(?:\s+\w+)?\s*\)`)
+var handlerSigRe = regexp.MustCompile(`func\s+(?:\([^)]*\)\s+)?\w+\s*\([^)]*\*http\.Request(?:\s+\w+)?\s*\)`)
 
 // bodyReadRe matches direct reads or decodes from a request body.
 var bodyReadRe = regexp.MustCompile(`\b(r|req|request)\.(Body|ParseForm|ParseMultipartForm|FormValue)\b|\.Decode\s*\(&?\w+\s*\)`)
@@ -81,12 +81,12 @@ func (r SLP224) Check(d *diff.Diff) []Finding {
 
 			// Emit a finding when the first body read is added in a handler
 			// hunk without guards or explicit decode error handling.
-			for i, ln := range h.Lines {
+			for _, ln := range h.Lines {
 				if ln.Kind != diff.LineAdd || !bodyReadRe.MatchString(ln.Content) {
 					continue
 				}
 				hunkText := ""
-				for _, l := range h.Lines[i:] {
+				for _, l := range h.Lines {
 					if l.Kind == diff.LineAdd || l.Kind == diff.LineContext {
 						hunkText += l.Content + "\n"
 					}

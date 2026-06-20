@@ -108,6 +108,13 @@ func extractPathShapedParams(paramBlock string) []string {
 func hunkValidatesParam(hunkLines []diff.Line, param string) bool {
 	// Build one string of all added lines in the hunk with the param name
 	// available for pattern-matching.
+
+	// Compile the validation regex once per call — param doesn't change
+	// within this function.
+	validationRe := regexp.MustCompile(
+		strings.ReplaceAll(validationSignalRe.String(), pathParamPlaceholder, regexp.QuoteMeta(param)),
+	)
+
 	for _, ln := range hunkLines {
 		if ln.Kind != diff.LineAdd {
 			continue
@@ -132,8 +139,7 @@ func hunkValidatesParam(hunkLines []diff.Line, param string) bool {
 		// `anotherParamPath` because the hunk has `sourceRoot`. We require
 		// the parameter name to appear as a whole word.
 		if strings.Contains(content, param) {
-			pattern := strings.ReplaceAll(validationSignalRe.String(), pathParamPlaceholder, regexp.QuoteMeta(param))
-			if regexp.MustCompile(pattern).MatchString(content) {
+			if validationRe.MatchString(content) {
 				return true
 			}
 		}

@@ -64,12 +64,6 @@ func (r SLP225) Check(d *diff.Diff) []Finding {
 				continue
 			}
 
-			addedText := ""
-			for _, ln := range added {
-				addedText += ln.Content + "\n"
-			}
-			hasSync := syncGuardRe.MatchString(addedText)
-
 			// Locate each goroutine in the added hunk and check for writes
 			// inside it.
 			for i, ln := range added {
@@ -84,15 +78,27 @@ func (r SLP225) Check(d *diff.Diff) []Finding {
 					end = len(added) - 1
 				}
 
-				// If the surrounding function already has a guard declared,
-				// treat the block as guarded unless the goroutine captures it
-				// without using it. We keep it simple: any sync construct in the
-				// hunk satisfies the guard requirement.
-				if hasSync {
+				// Determine whether the goroutine body itself contains a sync
+				// guard. Each goroutine is assessed independently.
+				goroutineText := ""
+				for k := start; k <= end; k++ {
+					goroutineText += added[k].Content + "\n"
+				}
+				if syncGuardRe.MatchString(goroutineText) {
 					continue
 				}
 
-				for j := start + 1; j < end; j++ {
+				// Check if the goroutine body (or start line for single-line)
+				// mutates shared state.
+				bodyStart := start + 1
+				bodyEnd := end
+				if start == end {
+					// Single-line goroutine: scan the start line itself.
+					bodyStart = start
+					bodyEnd = start
+				}
+
+				for j := bodyStart; j <= bodyEnd; j++ {
 					content := added[j].Content
 					if mapWriteRe.MatchString(content) ||
 						fieldWriteRe.MatchString(content) ||
@@ -124,23 +130,24 @@ func hunkAddedLines(h diff.Hunk) []diff.Line {
 	return added
 }
 
-// goroutineEnd returns the index in `added` that closes the goroutine block
-// started at idx. It does naive brace counting across added lines only.
+// goroutineEnd locates the closing line of a goroutine starting at added[idx].
+// It walks forward counting brace depth. Returns idx for single-line goroutines
+// (same line opens and closes the func body).
 func goroutineEnd(added []diff.Line, idx int) int {
-	depth := 0
-	inBody := false
-	for i := idx; i < len(added); i++ {
-		content := added[i].Content
-		open := strings.Count(content, "{")
-		close := strings.Count(content, "}")
-		if i == idx {
-			open--
-		}
-		if open > 0 {
-			inBody = true
-		}
+	firstLine := added[idx].Content
+	openFirst := strings.Count(firstLine, "{")
+	closeFirst := strings.Count(firstLine, "}")
+	if openFirst == closeFirst {
+		// Single-line goroutine: go func() { ... }() — all on one line.
+		return idx
+	}
+
+	depth := 1 // the goroutine's opening brace
+	for i := idx + 1; i < len(added); i++ {
+		open := strings.Count(added[i].Content, "{")
+		close := strings.Count(added[i].Content, "}")
 		depth += open - close
-		if inBody && depth <= 0 {
+		if depth <= 0 {
 			return i
 		}
 	}

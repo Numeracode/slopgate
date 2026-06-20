@@ -41,6 +41,11 @@ func (SLP218) Description() string {
 // contentLengthGateRe matches ContentLength checks used as body gates.
 var contentLengthGateRe = regexp.MustCompile(`\b(r|req|request)\.ContentLength\s*(>|<=|==|!=)\s*-?\d+`)
 
+// nonGatingRe matches ContentLength comparisons that are non-gating (inequality
+// against 0 or -1) — these exclude a zero-length body but don't help with
+// chunked encoding where ContentLength == -1.
+var nonGatingRe = regexp.MustCompile(`\b(r|req|request)\.ContentLength\s*(<= 0|== -1|== 0)\b`)
+
 // transferEncodingRef matches code that acknowledges chunked encoding.
 var transferEncodingRef = regexp.MustCompile(`(?i)\bTransferEncoding|transfer[-_]encoding|"chunked"|isChunked|IsChunked`)
 
@@ -85,7 +90,7 @@ func (r SLP218) Check(d *diff.Diff) []Finding {
 					}
 					// Skip non-gating comparisons: <= 0, == -1, and == 0
 					// are all "there's no body" checks, not body-present gates.
-					if strings.Contains(ln.Content, "<= 0") || strings.Contains(ln.Content, "== -1") || strings.Contains(ln.Content, "== 0") {
+					if nonGatingRe.MatchString(ln.Content) {
 						continue
 					}
 					out = append(out, Finding{

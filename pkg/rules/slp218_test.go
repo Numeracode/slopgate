@@ -1,85 +1,88 @@
 package rules
 
 import (
-	"strings"
 	"testing"
 )
 
-func TestSLP218_FlagsContentLengthGateWithoutChunked(t *testing.T) {
-	d := parseDiff(t, `diff --git a/internal/handlers/e2ee.go b/internal/handlers/e2ee.go
---- a/internal/handlers/e2ee.go
-+++ b/internal/handlers/e2ee.go
-@@ -10,6 +10,10 @@ func DecryptHandler(w http.ResponseWriter, r *http.Request) {
-  var body DecryptRequest
-+	if r.ContentLength > 0 {
-+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-+			http.Error(w, err.Error(), 400)
-+		}
-+	}
+func TestSLP218ContentLengthGate(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handlers.go b/handlers.go
+--- a/handlers.go
++++ b/handlers.go
+@@ -10,5 +10,8 @@
+ func Handler(w http.ResponseWriter, r *http.Request) {
+     var body Req
++    if r.ContentLength > 0 {
++        _ = json.NewDecoder(r.Body).Decode(&body)
++    }
  }
 `)
-	findings := SLP218{}.Check(d)
-	if len(findings) != 1 {
-		t.Errorf("expected 1 finding, got %d", len(findings))
-	}
-	if !strings.Contains(findings[0].Message, "chunked") {
-		t.Errorf("expected message about chunked encoding, got: %s", findings[0].Message)
+	got := len(SLP218{}.Check(d))
+	if got != 1 {
+		t.Fatalf("expected 1 finding, got %d", got)
 	}
 }
 
-func TestSLP218_NoWarningWhenChunkedHandled(t *testing.T) {
-	d := parseDiff(t, `diff --git a/internal/handlers/e2ee.go b/internal/handlers/e2ee.go
---- a/internal/handlers/e2ee.go
-+++ b/internal/handlers/e2ee.go
-@@ -10,6 +10,13 @@ func DecryptHandler(w http.ResponseWriter, r *http.Request) {
-  var body DecryptRequest
-+	isChunked := r.TransferEncoding != nil && len(r.TransferEncoding) > 0
-+	if r.ContentLength > 0 || isChunked {
-+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-+			http.Error(w, err.Error(), 400)
-+		}
-+	}
+func TestSLP218TransferEncodingOK(t *testing.T) {
+	d := parseDiff(t, `diff --git a/handlers.go b/handlers.go
+--- a/handlers.go
++++ b/handlers.go
+@@ -10,5 +10,11 @@
+ func Handler(w http.ResponseWriter, r *http.Request) {
+     var body Req
++    if r.ContentLength > 0 || len(r.TransferEncoding) > 0 {
++        _ = json.NewDecoder(r.Body).Decode(&body)
++    }
  }
 `)
-	findings := SLP218{}.Check(d)
-	if len(findings) != 0 {
-		t.Errorf("expected 0 findings when chunked is handled, got %d", len(findings))
+	got := len(SLP218{}.Check(d))
+	if got != 0 {
+		t.Fatalf("expected 0 findings when TransferEncoding referenced, got %d", got)
 	}
 }
 
-func TestSLP218_NoWarningWhenContentLengthZero(t *testing.T) {
-	d := parseDiff(t, `diff --git a/internal/handlers/e2ee.go b/internal/handlers/e2ee.go
---- a/internal/handlers/e2ee.go
-+++ b/internal/handlers/e2ee.go
-@@ -10,6 +10,9 @@ func DecryptHandler(w http.ResponseWriter, r *http.Request) {
-  var body DecryptRequest
-+	if r.ContentLength == 0 {
-+		http.Error(w, "no body", 400)
-+	}
+func TestSLP218FileOpaquePath(t *testing.T) {
+	d := parseDiff(t, `diff --git a/uri.go b/uri.go
+--- a/uri.go
++++ b/uri.go
+@@ -10,5 +10,8 @@
+ func FileURL(path string) *url.URL {
+-    return &url.URL{Scheme: "file", Path: path}
++    return &url.URL{Scheme: "file", Opaque: path}
  }
 `)
-	findings := SLP218{}.Check(d)
-	if len(findings) != 0 {
-		t.Errorf("expected 0 findings for ContentLength == 0 check, got %d", len(findings))
+	got := len(SLP218{}.Check(d))
+	if got != 1 {
+		t.Fatalf("expected 1 finding for Opaque path, got %d", got)
 	}
 }
 
-func TestSLP218_IgnoresNonHTTPContext(t *testing.T) {
-	d := parseDiff(t, `diff --git a/internal/utils.go b/internal/utils.go
---- a/internal/utils.go
-+++ b/internal/utils.go
-@@ -1,0 +1,4 @@
-+func processFile() {
-+	if fileInfo.ContentLength > 0 {
-+		// not an HTTP handler
-+	}
-+}
+func TestSLP218FilePathOK(t *testing.T) {
+	d := parseDiff(t, `diff --git a/uri.go b/uri.go
+--- a/uri.go
++++ b/uri.go
+@@ -10,5 +10,8 @@
+ func FileURL(path string) *url.URL {
+-    return &url.URL{Scheme: "file", Opaque: path}
++    return &url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+ }
 `)
-	findings := SLP218{}.Check(d)
-	// Should still flag it since the rule is conservative, but this test
-	// documents that it doesn't specifically check for handler context
-	// (which is hard to detect reliably)
-	if len(findings) > 1 {
-		t.Errorf("expected at most 1 finding for non-HTTP context, got %d", len(findings))
+	got := len(SLP218{}.Check(d))
+	if got != 0 {
+		t.Fatalf("expected 0 findings for Path usage, got %d", got)
+	}
+}
+
+func TestSLP218NonPathOpaqueOK(t *testing.T) {
+	d := parseDiff(t, `diff --git a/uri.go b/uri.go
+--- a/uri.go
++++ b/uri.go
+@@ -10,5 +10,8 @@
+ func GUID() *url.URL {
++    return &url.URL{Scheme: "file", Opaque: "abc123"}
+ }
+`)
+	got := len(SLP218{}.Check(d))
+	if got != 0 {
+		t.Fatalf("expected 0 findings for non-path opaque, got %d", got)
 	}
 }

@@ -44,19 +44,15 @@ func TestDefault_RegistersAllV001Rules(t *testing.T) {
 		"SLP040": false,
 		"SLP041": false,
 		"SLP042": false,
-		"SLP043": false,
-		"SLP044": false,
 		"SLP045": false,
 		"SLP046": false,
 		"SLP047": false,
 		"SLP048": false,
 		"SLP049": false,
-		"SLP050": false,
 		"SLP051": false,
 		"SLP052": false,
 		"SLP053": false,
 		"SLP054": false,
-		"SLP055": false,
 		"SLP056": false,
 		"SLP057": false,
 		"SLP058": false,
@@ -66,7 +62,6 @@ func TestDefault_RegistersAllV001Rules(t *testing.T) {
 		"SLP062": false,
 		"SLP063": false,
 		"SLP064": false,
-		"SLP065": false,
 		"SLP066": false,
 		"SLP067": false,
 		"SLP068": false,
@@ -104,13 +99,11 @@ func TestDefault_RegistersAllV001Rules(t *testing.T) {
 		"SLP111": false,
 		"SLP112": false,
 		"SLP113": false,
-		"SLP114": false,
 		"SLP115": false,
 		"SLP116": false,
 		"SLP117": false,
 		"SLP118": false,
 		"SLP119": false,
-		"SLP120": false,
 		"SLP121": false,
 		"SLP122": false,
 		"SLP123": false,
@@ -142,6 +135,19 @@ func TestDefault_RegistersAllV001Rules(t *testing.T) {
 		"SLP207": false,
 		"SLP208": false,
 		"SLP209": false,
+		"SLP215": false,
+		"SLP216": false,
+		"SLP217": false,
+		"SLP218": false,
+		"SLP219": false,
+		"SLP220": false,
+		"SLP221": false,
+		"SLP222": false,
+		"SLP223": false,
+		"SLP224": false,
+		"SLP225": false,
+		"SLP226": false,
+		"SLP227": false,
 	}
 	for _, rule := range r.All() {
 		if _, ok := want[rule.ID()]; ok {
@@ -158,8 +164,8 @@ func TestDefault_RegistersAllV001Rules(t *testing.T) {
 func TestDefault_NoExtraRules(t *testing.T) {
 	r := Default()
 
-	// Includes SLP202-SLP205, SLP207, the P3 rules SLP151, SLP152, new precision rules SLP155-159, SLP035 split rules SLP160-162, reviewer gap rules SLP210-214, reviewer gap closure v2 rules SLP215-218, and reviewer gap closure v3 rules SLP219-222.
-	wantCount := 164
+	// Includes SLP202-SLP205, SLP207, the P3 rules SLP151, SLP152, new precision rules SLP155-159, SLP035 split rules SLP160-162, reviewer gap rules SLP210-214, reviewer gap closure v2 rules SLP215-218, reviewer gap closure v3 rules SLP219-222, and v4 rules SLP223-227.
+	wantCount := 162
 	if got := len(r.All()); got != wantCount {
 		t.Errorf("Default registry has %d rules, want %d", got, wantCount)
 	}
@@ -177,8 +183,8 @@ func TestDefault_NoExtraRules(t *testing.T) {
 		"SLP101", "SLP102", "SLP103", "SLP104",
 		"SLP106", "SLP107", "SLP108", "SLP109", "SLP110",
 		"SLP111", "SLP112",
-		"SLP113", "SLP114", "SLP115", "SLP116", "SLP117",
-		"SLP118", "SLP119", "SLP120",
+		"SLP113", "SLP115", "SLP116", "SLP117",
+		"SLP118", "SLP119",
 		"SLP121", "SLP122", "SLP123", "SLP124", "SLP125",
 		"SLP126", "SLP127",
 		"SLP128", "SLP129", "SLP130", "SLP131", "SLP132",
@@ -197,6 +203,19 @@ func TestDefault_NoExtraRules(t *testing.T) {
 		"SLP207",
 		"SLP208",
 		"SLP209",
+		"SLP215",
+		"SLP216",
+		"SLP217",
+		"SLP218",
+		"SLP219",
+		"SLP220",
+		"SLP221",
+		"SLP222",
+		"SLP223",
+		"SLP224",
+		"SLP225",
+		"SLP226",
+		"SLP227",
 	}
 	for _, id := range newRules {
 		if !ruleIDs[id] {

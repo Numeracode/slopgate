@@ -44,19 +44,15 @@ func Default() *Registry {
 	r.Register(SLP040{})
 	r.Register(SLP041{})
 	r.Register(SLP042{})
-	r.Register(SLP043{})
-	r.Register(SLP044{})
 	r.Register(SLP045{})
 	r.Register(SLP046{})
 	r.Register(SLP047{})
 	r.Register(SLP048{})
 	r.Register(SLP049{})
-	r.Register(SLP050{})
 	r.Register(SLP051{})
 	r.Register(SLP052{})
 	r.Register(SLP053{})
 	r.Register(SLP054{})
-	r.Register(SLP055{})
 	r.Register(SLP056{})
 	r.Register(SLP057{})
 	r.Register(SLP058{})
@@ -66,7 +62,6 @@ func Default() *Registry {
 	r.Register(SLP062{})
 	r.Register(SLP063{})
 	r.Register(SLP064{})
-	r.Register(SLP065{})
 	r.Register(SLP066{})
 	r.Register(SLP067{})
 	r.Register(SLP068{})
@@ -117,13 +112,11 @@ func Default() *Registry {
 	r.Register(SLP111{})
 	r.Register(SLP112{})
 	r.Register(SLP113{})
-	r.Register(SLP114{})
 	r.Register(SLP115{})
 	r.Register(SLP116{})
 	r.Register(SLP117{})
 	r.Register(SLP118{})
 	r.Register(SLP119{})
-	r.Register(SLP120{})
 	r.Register(SLP121{})
 	r.Register(SLP122{})
 	r.Register(SLP123{})
@@ -194,5 +187,10 @@ func Default() *Registry {
 	r.Register(SLP220{}) // filepath.Walk without context cancellation check
 	r.Register(SLP221{}) // exec.Command without capturing stderr on failure
 	r.Register(SLP222{}) // treating UTF-16/BOM data as UTF-8 without decoding
+	r.Register(SLP223{}) // ignored error return
+	r.Register(SLP224{}) // HTTP handler missing request body/param validation
+	r.Register(SLP225{}) // goroutine mutating shared state without sync
+	r.Register(SLP226{}) // SQL resource/transaction imbalance
+	r.Register(SLP227{}) // repeated string literal
 	return r
 }

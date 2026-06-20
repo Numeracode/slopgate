@@ -1,3 +1,5 @@
+//go:build ignore_retired
+
 package rules
 
 import (

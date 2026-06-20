@@ -1,89 +1,131 @@
 package rules
 
 import (
-	"strings"
 	"testing"
 )
 
-func TestSLP217_FlagsEmptyPathParamWithoutValidation(t *testing.T) {
-	d := parseDiff(t, `diff --git a/connector/stage/backup.go b/connector/stage/backup.go
---- a/connector/stage/backup.go
-+++ b/connector/stage/backup.go
-@@ -1,0 +1,5 @@
-+func Backup(sourceRoot string, remoteDest string) error {
-+	// process files
-+	return nil
-+}
+func TestSLP217GoExportedFunctionMissingCheck(t *testing.T) {
+	d := parseDiff(t, `diff --git a/backup.go b/backup.go
+--- a/backup.go
++++ b/backup.go
+@@ -1,5 +1,8 @@
+ package backup
 +
++func Backup(sourceRoot, remoteDest string) (*Result, error) {
++    stagingDir := filepath.Join(remoteDest, "staging")
++    return nil, nil
++}
 `)
-	findings := SLP217{}.Check(d)
-	if len(findings) < 2 {
-		t.Errorf("expected at least 2 findings (one per unvalidated param), got %d", len(findings))
-	}
-	hasSourceRoot := false
-	hasRemoteDest := false
-	for _, f := range findings {
-		if strings.Contains(f.Message, "sourceRoot") {
-			hasSourceRoot = true
-		}
-		if strings.Contains(f.Message, "remoteDest") {
-			hasRemoteDest = true
-		}
-	}
-	if !hasSourceRoot {
-		t.Errorf("expected finding about sourceRoot")
-	}
-	if !hasRemoteDest {
-		t.Errorf("expected finding about remoteDest")
+	want := 2
+	got := len(SLP217{}.Check(d))
+	if got != want {
+		t.Fatalf("expected %d findings, got %d", want, got)
 	}
 }
 
-func TestSLP217_NoWarningWhenEmptyCheckPresent(t *testing.T) {
-	d := parseDiff(t, `diff --git a/connector/stage/backup.go b/connector/stage/backup.go
---- a/connector/stage/backup.go
-+++ b/connector/stage/backup.go
-@@ -1,0 +1,7 @@
-+func Backup(sourceRoot string) error {
-+	if sourceRoot == "" {
-+		return fmt.Errorf("sourceRoot cannot be empty")
-+	}
-+	// process files
-+	return nil
-+}
-`)
-	findings := SLP217{}.Check(d)
-	if len(findings) != 0 {
-		t.Errorf("expected 0 findings when empty check is present, got %d", len(findings))
-	}
-}
-
-func TestSLP217_NoWarningForNonPathParams(t *testing.T) {
-	d := parseDiff(t, `diff --git a/connector/stage/backup.go b/connector/stage/backup.go
---- a/connector/stage/backup.go
-+++ b/connector/stage/backup.go
-@@ -1,0 +1,4 @@
-+func Backup(userId string, count int) error {
-+	return nil
-+}
+func TestSLP217GoUnexportedFunctionNotFlagged(t *testing.T) {
+	d := parseDiff(t, `diff --git a/backup.go b/backup.go
+--- a/backup.go
++++ b/backup.go
+@@ -1,5 +1,8 @@
+ package backup
 +
++func backup(sourceRoot, remoteDest string) (*Result, error) {
++    stagingDir := filepath.Join(remoteDest, "staging")
++    return nil, nil
++}
 `)
-	findings := SLP217{}.Check(d)
-	if len(findings) != 0 {
-		t.Errorf("expected 0 findings for non-path parameters, got %d", len(findings))
+	got := len(SLP217{}.Check(d))
+	if got != 0 {
+		t.Fatalf("expected 0 findings for unexported helper, got %d", got)
 	}
 }
 
-func TestSLP217_JS_ArrowFunction(t *testing.T) {
-	d := parseDiff(t, `diff --git a/lib/utils.ts b/lib/utils.ts
---- a/lib/utils.ts
-+++ b/lib/utils.ts
-@@ -1,0 +1,3 @@
-+const processDir = (dirPath: string) => {
-+  return dirPath.toUpperCase()
+func TestSLP217GoMethodWithValidationOK(t *testing.T) {
+	d := parseDiff(t, `diff --git a/backup.go b/backup.go
+--- a/backup.go
++++ b/backup.go
+@@ -1,5 +1,10 @@
+ package backup
++
++func Backup(sourceRoot, remoteDest string) (*Result, error) {
++    if sourceRoot == "" {
++        return nil, fmt.Errorf("source root required")
++    }
++    return nil, nil
 +}
 `)
-	findings := SLP217{}.Check(d)
-	if len(findings) != 1 {
-		t.Errorf("expected 1 finding for JS arrow function, got %d", len(findings))
+	got := len(SLP217{}.Check(d))
+	if got != 1 {
+		t.Fatalf("expected 1 finding (remoteDest unchecked), got %d", got)
+	}
+}
+
+func TestSLP217JSExportedFunctionMissingCheck(t *testing.T) {
+	d := parseDiff(t, `diff --git a/lib/backup.js b/lib/backup.js
+--- a/lib/backup.js
++++ b/lib/backup.js
+@@ -1,5 +1,8 @@
+-export function runBackup(sourceRoot, remoteDest) {
++export function runBackup(sourceRoot, remoteDest) {
++    const stagingDir = path.join(remoteDest, 'staging');
++    return stagingDir;
+ }
+`)
+	want := 2
+	got := len(SLP217{}.Check(d))
+	if got != want {
+		t.Fatalf("expected %d findings, got %d", want, got)
+	}
+}
+
+func TestSLP217JSUnexportedFunctionNotFlagged(t *testing.T) {
+	d := parseDiff(t, `diff --git a/lib/backup.js b/lib/backup.js
+--- a/lib/backup.js
++++ b/lib/backup.js
+@@ -1,5 +1,8 @@
+-function runBackup(sourceRoot, remoteDest) {
++function runBackup(sourceRoot, remoteDest) {
++    const stagingDir = path.join(remoteDest, 'staging');
++    return stagingDir;
+ }
+`)
+	got := len(SLP217{}.Check(d))
+	if got != 0 {
+		t.Fatalf("expected 0 findings for unexported JS helper, got %d", got)
+	}
+}
+
+func TestSLP217JSValidationTruthyOK(t *testing.T) {
+	d := parseDiff(t, `diff --git a/lib/backup.js b/lib/backup.js
+--- a/lib/backup.js
++++ b/lib/backup.js
+@@ -1,5 +1,8 @@
++export function runBackup(sourceRoot) {
++    if (!sourceRoot) return;
++    return sourceRoot;
++}
+`)
+	got := len(SLP217{}.Check(d))
+	if got != 0 {
+		t.Fatalf("expected 0 findings when !sourceRoot validation present, got %d", got)
+	}
+}
+
+func TestSLP217ModuleExportArrowFlagged(t *testing.T) {
+	d := parseDiff(t, `diff --git a/lib/backup.js b/lib/backup.js
+--- a/lib/backup.js
++++ b/lib/backup.js
+@@ -1,5 +1,8 @@
+-module.exports.runBackup = (sourceRoot, remoteDest) => {
++module.exports.runBackup = (sourceRoot, remoteDest) => {
++    const stagingDir = path.join(remoteDest, 'staging');
++    return stagingDir;
++}
+`)
+	want := 2
+	got := len(SLP217{}.Check(d))
+	if got != want {
+		t.Fatalf("expected %d findings for module.exports arrow, got %d", want, got)
 	}
 }

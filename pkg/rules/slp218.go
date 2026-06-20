@@ -7,31 +7,55 @@ import (
 	"github.com/messagesgoel-blip/slopgate/pkg/diff"
 )
 
-// SLP218 flags Go HTTP handlers that gate body-reading on
-// `r.ContentLength > 0` (or <= 0, == -1, etc.) without also considering
-// chunked transfer-encoding. The chunked case has ContentLength == -1,
-// so a bare `ContentLength > 0` check drops chunked requests silently.
+// SLP218 flags two related HTTP request-body handling smells:
 //
-// Reviewer pattern (whimsy PR #1967 handlers_e2ee.go:165):
+// 1. Go HTTP handlers that gate body-reading on `r.ContentLength > 0`
+//    (or <= 0, == -1, etc.) without also considering chunked
+//    transfer-encoding. The chunked case has ContentLength == -1, so a
+//    bare `ContentLength > 0` check drops chunked requests silently.
 //
-//	if r.ContentLength > 0 {
-//	    _ = json.NewDecoder(r.Body).Decode(&body)
-//	}
+//    Reviewer pattern (whimsy PR #1967 handlers_e2ee.go:165):
 //
-// Correct pattern also checks r.TransferEncoding or reads regardless.
+//	  if r.ContentLength > 0 {
+//	      _ = json.NewDecoder(r.Body).Decode(&body)
+//	  }
+//
+//    Correct pattern also checks r.TransferEncoding or reads regardless.
+//
+// 2. Constructing a url.URL with Scheme "file" and putting path-like data
+//    in Opaque while Path remains unset. The Opaque field is meant for
+//    non-hierarchical URIs; for file URLs the path should be assigned
+//    (and filepath.ToSlash applied when converting OS paths).
+//
+//    Reviewer pattern: url.URL{Scheme:"file", Opaque: p} where p looks
+//    like a filesystem path. Correct: url.URL{Scheme:"file", Path:
+//    filepath.ToSlash(p)}.
 type SLP218 struct{}
 
 func (SLP218) ID() string                { return "SLP218" }
 func (SLP218) DefaultSeverity() Severity { return SeverityBlock }
 func (SLP218) Description() string {
-	return "ContentLength>0 check without Transfer-Encoding handling drops chunked requests"
+	return "HTTP body/URL handling ignores chunked transfer or misuses file URL Opaque"
 }
 
 // contentLengthGateRe matches ContentLength checks used as body gates.
 var contentLengthGateRe = regexp.MustCompile(`\b(r|req|request)\.ContentLength\s*(>|<=|==|!=)\s*-?\d+`)
 
+// nonGatingRe matches ContentLength comparisons that are non-gating (inequality
+// against 0 or -1) — these exclude a zero-length body but don't help with
+// chunked encoding where ContentLength == -1.
+var nonGatingRe = regexp.MustCompile(`\b(r|req|request)\.ContentLength\s*(<= 0|== -1|== 0)\b`)
+
 // transferEncodingRef matches code that acknowledges chunked encoding.
 var transferEncodingRef = regexp.MustCompile(`(?i)\bTransferEncoding|transfer[-_]encoding|"chunked"|isChunked|IsChunked`)
+
+// fileOpaqueRe matches url.URL{Scheme:"file", Opaque: ...} constructions.
+// Group 1 is the variable holding path-like data assigned to Opaque.
+var fileOpaqueRe = regexp.MustCompile(`url\.URL\s*\{\s*Scheme\s*:\s*"file"\s*,\s*Opaque\s*:\s*([^,}\s]+)`)
+
+// pathLikeOpaqueRe matches Opaque values that look like filesystem paths.
+// A variable named path is enough to treat as path-like (per reviewer pattern).
+var pathLikeOpaqueRe = regexp.MustCompile(`[/.\\~]|^\w*[Pp]ath(\w*)$`)
 
 func (r SLP218) Check(d *diff.Diff) []Finding {
 	var out []Finding
@@ -42,6 +66,7 @@ func (r SLP218) Check(d *diff.Diff) []Finding {
 		if strings.HasSuffix(strings.ToLower(f.Path), "_test.go") {
 			continue
 		}
+		isGo := true
 
 		for _, h := range f.Hunks {
 			// Build one string of all added content in the hunk.
@@ -57,33 +82,58 @@ func (r SLP218) Check(d *diff.Diff) []Finding {
 				continue
 			}
 
-			// If the hunk already considers TransferEncoding, don't flag.
-			if transferEncodingRef.MatchString(addedText) {
-				continue
+			// 1. ContentLength/TransferEncoding check.
+			if !transferEncodingRef.MatchString(addedText) {
+				for _, ln := range addedLines {
+					if !contentLengthGateRe.MatchString(ln.Content) {
+						continue
+					}
+					// Skip non-gating comparisons: <= 0, == -1, and == 0
+					// are all "there's no body" checks, not body-present gates.
+					if nonGatingRe.MatchString(ln.Content) {
+						continue
+					}
+					out = append(out, Finding{
+						RuleID:   r.ID(),
+						Severity: r.DefaultSeverity(),
+						File:     f.Path,
+						Line:     ln.NewLineNo,
+						Message:  "ContentLength gate misses chunked transfer — also check r.TransferEncoding or read body unconditionally",
+						Snippet:  strings.TrimSpace(ln.Content),
+					})
+				}
 			}
 
-			// Flag each added line that carries a bare ContentLength gate.
-			for _, ln := range addedLines {
-				if !contentLengthGateRe.MatchString(ln.Content) {
-					continue
+			// 2. File-URL Opaque misuse (Go only).
+			if isGo {
+				for _, m := range fileOpaqueRe.FindAllStringSubmatch(addedText, -1) {
+					if len(m) < 2 {
+						continue
+					}
+					opaque := strings.TrimSpace(m[1])
+					if !pathLikeOpaqueRe.MatchString(opaque) {
+						continue
+					}
+					// Determine the line number of the Opaque assignment.
+					var lineNo int
+					for _, ln := range addedLines {
+						if strings.Contains(ln.Content, "Opaque:") {
+							lineNo = ln.NewLineNo
+							break
+						}
+					}
+					if lineNo == 0 {
+						lineNo = addedLines[0].NewLineNo
+					}
+					out = append(out, Finding{
+						RuleID:   r.ID(),
+						Severity: r.DefaultSeverity(),
+						File:     f.Path,
+						Line:     lineNo,
+						Message:  "file URL assigns path-like data to Opaque instead of Path (use filepath.ToSlash)",
+						Snippet:  strings.TrimSpace(m[0]),
+					})
 				}
-				// Skip if the line also uses ContentLength <= 0 as a
-				// fall-through "body might be here" guard — that's actually
-				// the *correct* idiom when paired with an unconditional
-				// decode in an else branch or later in the function.
-				// Skip non-gating comparisons: <= 0, == -1, and == 0
-				// are all "there's no body" checks, not body-present gates.
-				if strings.Contains(ln.Content, "<= 0") || strings.Contains(ln.Content, "== -1") || strings.Contains(ln.Content, "== 0") {
-					continue
-				}
-				out = append(out, Finding{
-					RuleID:   r.ID(),
-					Severity: r.DefaultSeverity(),
-					File:     f.Path,
-					Line:     ln.NewLineNo,
-					Message:  "ContentLength gate misses chunked transfer — also check r.TransferEncoding or read body unconditionally",
-					Snippet:  strings.TrimSpace(ln.Content),
-				})
 			}
 		}
 	}

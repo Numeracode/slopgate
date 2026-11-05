@@ -21,6 +21,13 @@ import (
 //
 // Languages: Go, Python, Java, JS/TS, SQL.
 // Scope: diff only — scans added lines within each file hunk.
+//
+// JS/TS Drizzle transactions are callback-managed (Drizzle issues ROLLBACK
+// itself when the callback rejects). A begin is exempted only when
+// slp207_managed.go proves, against the scanned source snapshot, that this
+// specific begin is such a managed call on a Drizzle receiver. Proven managed
+// calls are excluded individually; their callback contents are never used as
+// rollback/commit evidence for any other begin in the same hunk.
 type SLP207 struct{}
 
 // ID returns the rule identifier: "SLP207".
@@ -38,6 +45,11 @@ func (SLP207) Description() string {
 // Regex library
 // ---------------------------------------------------------------------------
 
+// slp207JSTransactionBegin is the JS/TS knex/sequelize/Objection/Drizzle
+// transaction start. It is named so the managed-transaction recognizer can
+// require that it is the only begin form on a line.
+var slp207JSTransactionBegin = regexp.MustCompile(`(?i)(?:knex|db|sequelize)\s*\.\s*transaction\s*\(`)
+
 // txBeginPatterns match the start of a database transaction.
 var txBeginPatterns = []*regexp.Regexp{
 	// Go: tx, err := db.Begin(ctx) / tx, err = db.Begin(ctx)
@@ -51,7 +63,7 @@ var txBeginPatterns = []*regexp.Regexp{
 	// Java: connection.setAutoCommit(false) marks an explicit transaction boundary.
 	regexp.MustCompile(`(?i)setAutoCommit\s*\(\s*false\s*\)`),
 	// JS/TS: knex/sequelize/Objection transaction starts.
-	regexp.MustCompile(`(?i)(?:knex|db|sequelize)\s*\.\s*transaction\s*\(`),
+	slp207JSTransactionBegin,
 	// Bare SQL BEGIN statement.
 	regexp.MustCompile(`(?i)^\s*BEGIN\b`),
 }
@@ -137,6 +149,7 @@ var txSkipPatterns = []*regexp.Regexp{
 //     Catches forgotten transactions where no cleanup is attempted at all.
 func (r SLP207) Check(d *diff.Diff) []Finding {
 	var out []Finding
+	managed := newSLP207Recognizer(d)
 
 	for _, f := range d.Files {
 		if f.IsDelete {
@@ -178,9 +191,31 @@ func (r SLP207) Check(d *diff.Diff) []Finding {
 				continue
 			}
 
+			// Exclude begins proven to be callback-managed Drizzle
+			// transactions, one begin at a time.
+			var spans [][2]int
+			var unmanaged []addedLine
+			for _, bl := range begins {
+				if start, end, ok := managed.managedSpan(f.Path, bl); ok {
+					spans = append(spans, [2]int{start, end})
+					continue
+				}
+				unmanaged = append(unmanaged, bl)
+			}
+			if len(unmanaged) == 0 {
+				continue
+			}
+			begins = unmanaged
+
+			// Rollback/commit evidence for the remaining begins must not come
+			// from inside a managed callback: a `tx.rollback()` there belongs to
+			// Drizzle's transaction, not to a sibling begin. With no managed
+			// spans this is exactly the hunk's added lines, as before.
+			evidence := slp207OutsideSpans(addedLines, spans)
+
 			// Check if rollback or commit already exists in this hunk.
-			hasRollback := hasAnyMatch(addedLines, txRollbackPatterns)
-			hasCommit := hasAnyMatch(addedLines, txCommitPatterns)
+			hasRollback := hasAnyMatch(evidence, txRollbackPatterns)
+			hasCommit := hasAnyMatch(evidence, txCommitPatterns)
 			if hasRollback {
 				continue
 			}
@@ -229,6 +264,28 @@ func (r SLP207) Check(d *diff.Diff) []Finding {
 type addedLine struct {
 	content   string
 	newLineNo int
+}
+
+// slp207OutsideSpans returns the lines that fall outside every [start, end]
+// source line span.
+func slp207OutsideSpans(lines []addedLine, spans [][2]int) []addedLine {
+	if len(spans) == 0 {
+		return lines
+	}
+	var out []addedLine
+	for _, ln := range lines {
+		inside := false
+		for _, sp := range spans {
+			if ln.newLineNo >= sp[0] && ln.newLineNo <= sp[1] {
+				inside = true
+				break
+			}
+		}
+		if !inside {
+			out = append(out, ln)
+		}
+	}
+	return out
 }
 
 // findLineMatches returns all added lines that match any of the given patterns.
